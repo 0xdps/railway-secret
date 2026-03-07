@@ -1,0 +1,25 @@
+public/index.php
+  27f44e93cd5fd922 295-304
+README.md
+  27f44e93cd5fd922 77-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "182841cbf40c1afca51bb8afcb3578863ed932c0",
+  "prompts": {
+    "27f44e93cd5fd922": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4e36263a-f20f-437b-b6a2-2c167e89add9",
+        "model": "copilot/auto"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 0,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    }
+  }
+}
