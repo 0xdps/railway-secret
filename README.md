@@ -74,6 +74,19 @@ Open: `http://localhost:8080`
    - Command: `php /var/www/html/cron.php`
    - Mount the same volume to `/var/www/html/storage`
 
+### Health Check
+
+Use one of these paths for Railway health checks:
+
+- `GET /health`
+- `GET /healthz`
+
+Expected response:
+
+```json
+{"ok":true,"status":"healthy","timestamp":"..."}
+```
+
 ## Railway Template Publish Guide
 
 Use this checklist to publish as a Railway template.

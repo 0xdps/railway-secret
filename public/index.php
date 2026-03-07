@@ -292,6 +292,16 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' https://u
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Health checks (unauthenticated)
+if (($path === '/health' || $path === '/healthz') && $method === 'GET') {
+    sendApiJson(200, [
+        'ok' => true,
+        'status' => 'healthy',
+        'timestamp' => gmdate('c'),
+    ]);
+    exit;
+}
+
 // Auth Logic
 if ($path === '/login' && $method === 'POST') {
     $ip = getClientIp();
