@@ -1,4 +1,11 @@
 // Dashboard interactions - CSP-safe HTMX helpers
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = String(str ?? '');
+    return div.innerHTML;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const configModal = document.getElementById('configModal');
     const historyModal = document.getElementById('historyModal');
@@ -354,6 +361,45 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.body.addEventListener('click', async (event) => {
+        const copyBtn = event.target.closest('.js-copy-history-value');
+        if (!copyBtn) {
+            return;
+        }
+
+        const targetId = copyBtn.dataset.target || '';
+        const targetEl = targetId ? document.getElementById(targetId) : null;
+        if (!targetEl) {
+            return;
+        }
+
+        const value = targetEl.textContent || '';
+        if (targetEl.classList.contains('unavailable') || !value.trim()) {
+            showToast('No value to copy', 'error');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(value);
+            copyBtn.classList.add('success');
+            const icon = copyBtn.querySelector('[data-lucide]');
+            if (icon) {
+                icon.setAttribute('data-lucide', 'check');
+                refreshIcons();
+            }
+            setTimeout(() => {
+                copyBtn.classList.remove('success');
+                const resetIcon = copyBtn.querySelector('[data-lucide]');
+                if (resetIcon) {
+                    resetIcon.setAttribute('data-lucide', 'copy');
+                    refreshIcons();
+                }
+            }, 2000);
+        } catch (error) {
+            alert('Unable to copy value.');
+        }
+    });
+
+    document.body.addEventListener('click', async (event) => {
         const copyBtn = event.target.closest('.js-copy-secret');
         if (!copyBtn) {
             return;
@@ -545,8 +591,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const rows = services.map((service) => {
             const checked = selectedIds.has(service.id) ? 'checked' : '';
             return `<label class="group-service-option" style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;">
-                <input type="checkbox" name="serviceIds[]" value="${service.id}" ${checked}>
-                <span>${service.name}</span>
+                <input type="checkbox" name="serviceIds[]" value="${escapeHtml(service.id)}" ${checked}>
+                <span>${escapeHtml(service.name)}</span>
             </label>`;
         });
         groupServicesList.innerHTML = rows.join('');

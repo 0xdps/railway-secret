@@ -77,7 +77,7 @@ $currentSection = $section ?? 'secrets';
             </div>
             <nav>
                 <?php foreach ($groupItems as $svc): ?>
-                    <a href="/?serviceId=<?= $svc['id'] ?>" 
+                    <a href="/?serviceId=<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>" 
                        class="nav-link js-scope-nav js-grouped-service <?= ($currentSection !== 'history' && $serviceId === $svc['id']) ? 'active' : '' ?>"
                        hx-get="/?serviceId=<?= urlencode($svc['id']) ?>"
                        hx-target="#mainContent"

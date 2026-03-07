@@ -22,8 +22,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title><?= htmlspecialchars($viewTitle) ?> — Railway Secrets</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+    <script src="https://unpkg.com/lucide@0.577.0/dist/umd/lucide.js" integrity="sha384-1MrOtYSDnlvNAr6rHFMYrjwqLm+8lCPz+suIruDTmum9JoBgagrhFzxveKunHj30" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous" defer></script>
     <?php if (isset($extraHead)): echo $extraHead; endif; ?>
     <script src="/js/<?= htmlspecialchars($pageScript) ?>" defer></script>
 </head>
@@ -90,11 +90,21 @@
             <div class="history-detail-value" id="historyDetailTime">--</div>
         </div>
         <div class="history-values-block">
-            <div class="history-values-label">Old Value <span class="history-values-hint">(before rotation)</span></div>
+            <div class="history-values-label">
+                Old Value <span class="history-values-hint">(before rotation)</span>
+                <button type="button" class="btn-icon js-copy-history-value" data-target="historyDetailOldValue" title="Copy old value" style="margin-left:6px;">
+                    <i data-lucide="copy" style="width:11px;height:11px;"></i>
+                </button>
+            </div>
             <pre class="history-values-pre" id="historyDetailOldValue">--</pre>
         </div>
         <div class="history-values-block">
-            <div class="history-values-label">New Value <span class="history-values-hint" id="historyDetailNewValueHint"></span></div>
+            <div class="history-values-label">
+                New Value <span class="history-values-hint" id="historyDetailNewValueHint"></span>
+                <button type="button" class="btn-icon js-copy-history-value" data-target="historyDetailNewValue" title="Copy new value" style="margin-left:6px;">
+                    <i data-lucide="copy" style="width:11px;height:11px;"></i>
+                </button>
+            </div>
             <pre class="history-values-pre" id="historyDetailNewValue">--</pre>
         </div>
         <div class="modal-actions" style="margin-top:16px;">

@@ -320,6 +320,21 @@ class StorageService
         return (int)($row['cnt'] ?? 0);
     }
 
+    public function getRotationsLast24h(?string $serviceId = null): int
+    {
+        $since = gmdate('Y-m-d H:i:s', time() - 86400);
+        if ($serviceId === null) {
+            $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM secret_history WHERE rotated_at >= :since");
+        } else {
+            $stmt = $this->db->prepare("SELECT COUNT(*) AS cnt FROM secret_history WHERE service_id = :sid AND rotated_at >= :since");
+            $stmt->bindValue(':sid', $serviceId, SQLITE3_TEXT);
+        }
+        $stmt->bindValue(':since', $since, SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        return (int)($row['cnt'] ?? 0);
+    }
+
     public function setServiceGroup(string $serviceId, ?string $groupName): void
     {
         $serviceId = trim($serviceId);

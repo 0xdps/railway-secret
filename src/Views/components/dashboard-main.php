@@ -5,14 +5,7 @@
         $managedCount = isset($managed) && is_array($managed) ? count($managed) : 0;
         $serviceCount = isset($serviceCount) ? (int)$serviceCount : (isset($services) && is_array($services) ? count($services) : 0);
         $historyRows = isset($recentHistory) && is_array($recentHistory) ? $recentHistory : [];
-        $rotations24h = 0;
-        $nowTs = time();
-        foreach ($historyRows as $row) {
-            $rotatedAtTs = strtotime((string)($row['rotated_at'] ?? ''));
-            if ($rotatedAtTs !== false && ($nowTs - $rotatedAtTs) <= 86400) {
-                $rotations24h++;
-            }
-        }
+        $rotations24h = isset($rotations24h) ? (int)$rotations24h : 0;
     ?>
 
     <!-- Page Header -->

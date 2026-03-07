@@ -943,6 +943,7 @@ if ($path === '/' || $path === '') {
         $recentHistory = $storage->getRecentHistory($serviceId ?: null, 30);
         $managed = $storage->getManagedSecrets();
         $serviceCount = $storage->getServiceCount();
+        $rotations24h = $storage->getRotationsLast24h($serviceId ?: null);
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
         } else {
@@ -959,6 +960,7 @@ if ($path === '/' || $path === '') {
         $cacheFetchedAt = 0;
         $recentHistory = [];
         $serviceCount = $storage->getServiceCount();
+        $rotations24h = 0;
         $timeConfig = getRotationTimeConfig();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';

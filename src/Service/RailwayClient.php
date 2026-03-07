@@ -36,7 +36,7 @@ class RailwayClient
         $response = curl_exec($ch);
         $error = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        // curl_close($ch); is deprecated in 8.5+ and unnecessary in 8.0+
+        // curl_close() is a no-op since PHP 8.0 and was removed in PHP 8.5
 
         if ($error) {
             error_log("Railway API Client CURL Error: $error");

@@ -6,7 +6,7 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Login — Railway Secrets</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+    <script src="https://unpkg.com/lucide@0.577.0/dist/umd/lucide.js" integrity="sha384-1MrOtYSDnlvNAr6rHFMYrjwqLm+8lCPz+suIruDTmum9JoBgagrhFzxveKunHj30" crossorigin="anonymous" defer></script>
     <script src="/js/icons.js" defer></script>
 </head>
 <body class="auth-page">
