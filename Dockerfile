@@ -26,7 +26,7 @@ RUN mkdir -p /var/www/html/storage/db && \
     chmod -R 770 /var/www/html/storage
 
 # Expose port
-EXPOSE 80
+EXPOSE 8080
 
 # Start script to run both Nginx and FPM
-CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "PORT_TO_USE=${PORT:-8080} && sed -i \"s/listen 80;/listen ${PORT_TO_USE};/\" /etc/nginx/http.d/default.conf && php-fpm -D && nginx -g 'daemon off;'"]
