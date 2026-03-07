@@ -49,7 +49,7 @@
         <label class="form-label">Auto-rotate interval</label>
         <div class="input-with-suffix">
             <input type="number" name="interval" placeholder="0 = manual only" min="0" value="<?= (int)($config['interval_days'] ?? 30) ?>">
-            <span class="suffix">days</span>
+            <span class="suffix"><?= htmlspecialchars($timeConfig['label'] ?? 'days') ?></span>
         </div>
         <div class="form-hint">Set to 0 to only rotate manually.</div>
     </div>
@@ -61,17 +61,18 @@
     </div>
 
     <div class="modal-actions">
-        <button type="button" class="btn btn-ghost btn-md js-close-config-modal">
-            Cancel
-        </button>
         <button type="submit" name="mode" value="rotate_only" class="btn btn-ghost btn-md">
-            <i data-lucide="shield-check" style="width:13px;height:13px;"></i>
+            <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
             Rotate Now
         </button>
         <button type="submit" name="mode" value="save_only" class="btn btn-ghost btn-md">
+            <i data-lucide="save" style="width:13px;height:13px;"></i>
             Save Config
         </button>
+    </div>
+    <div class="modal-actions-primary">
         <button type="submit" name="mode" value="save_and_rotate" class="btn btn-primary btn-md">
+            <i data-lucide="zap" style="width:13px;height:13px;"></i>
             Save + Rotate
         </button>
     </div>
@@ -89,7 +90,7 @@
         </div>
         <button type="button" 
                 class="btn btn-danger btn-sm"
-                hx-delete="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode($serviceId) ?>&csrf_token=<?= urlencode($csrfToken) ?>"
+                hx-delete="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>"
                 hx-target="#secrets-table-body"
                 hx-swap="innerHTML"
                 hx-confirm="Stop managing '<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>'? This will not delete the variable itself.">

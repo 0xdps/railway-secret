@@ -46,6 +46,13 @@ class StorageService
         )");
 
         $this->db->exec("CREATE INDEX IF NOT EXISTS idx_secret_history_lookup ON secret_history(secret_name, service_id, rotated_at DESC)");
+
+        $this->db->exec("CREATE TABLE IF NOT EXISTS service_metadata (
+            service_id TEXT PRIMARY KEY,
+            service_name TEXT NOT NULL,
+            group_name TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
     }
 
     private function tableHasColumn(string $table, string $column): bool
@@ -136,5 +143,92 @@ class StorageService
             $history[] = $row;
         }
         return $history;
+    }
+
+    public function getRecentHistory(?string $serviceId = null, int $limit = 30): array
+    {
+        $limit = max(1, min($limit, 200));
+
+        if ($serviceId === null) {
+            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, rotated_at
+                FROM secret_history
+                ORDER BY datetime(rotated_at) DESC, id DESC
+                LIMIT :limit");
+            $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
+        } else {
+            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, rotated_at
+                FROM secret_history
+                WHERE service_id = :sid
+                ORDER BY datetime(rotated_at) DESC, id DESC
+                LIMIT :limit");
+            $stmt->bindValue(':sid', $serviceId, SQLITE3_TEXT);
+            $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
+        }
+
+        $result = $stmt->execute();
+        $rows = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    public function syncServiceNames(array $services): void
+    {
+        $stmt = $this->db->prepare("INSERT INTO service_metadata (service_id, service_name, group_name, updated_at)
+            VALUES (:id, :name, (SELECT group_name FROM service_metadata WHERE service_id = :id), CURRENT_TIMESTAMP)
+            ON CONFLICT(service_id) DO UPDATE SET
+                service_name = excluded.service_name,
+                updated_at = excluded.updated_at");
+
+        foreach ($services as $service) {
+            $id = (string)($service['id'] ?? '');
+            $name = (string)($service['name'] ?? '');
+            if ($id === '' || $name === '') {
+                continue;
+            }
+
+            $stmt->bindValue(':id', $id, SQLITE3_TEXT);
+            $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+            $stmt->execute();
+        }
+    }
+
+    public function getServiceGroupMap(): array
+    {
+        $result = $this->db->query("SELECT service_id, group_name FROM service_metadata WHERE group_name IS NOT NULL AND TRIM(group_name) != ''");
+        $map = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $map[(string)$row['service_id']] = (string)$row['group_name'];
+        }
+        return $map;
+    }
+
+    public function setServiceGroup(string $serviceId, ?string $groupName): void
+    {
+        $serviceId = trim($serviceId);
+        if ($serviceId === '') {
+            throw new \InvalidArgumentException('Invalid service id');
+        }
+
+        if ($groupName === null || trim($groupName) === '') {
+            $stmt = $this->db->prepare("UPDATE service_metadata SET group_name = NULL, updated_at = CURRENT_TIMESTAMP WHERE service_id = :id");
+            $stmt->bindValue(':id', $serviceId, SQLITE3_TEXT);
+            $stmt->execute();
+            return;
+        }
+
+        $groupName = trim($groupName);
+        if (strlen($groupName) > 64) {
+            throw new \InvalidArgumentException('Group name is too long');
+        }
+
+        $stmt = $this->db->prepare("UPDATE service_metadata
+            SET group_name = :group_name, updated_at = CURRENT_TIMESTAMP
+            WHERE service_id = :id");
+        $stmt->bindValue(':group_name', $groupName, SQLITE3_TEXT);
+        $stmt->bindValue(':id', $serviceId, SQLITE3_TEXT);
+        $stmt->execute();
     }
 }

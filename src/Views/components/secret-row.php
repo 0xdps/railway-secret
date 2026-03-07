@@ -57,7 +57,7 @@ $rowId = 'secret-' . md5($keyId);
         <?php if ($isManaged && $config['interval_days'] > 0): ?>
             <span class="badge badge-schedule">
                 <i data-lucide="clock" style="width:10px;height:10px;"></i>
-                Every <?= (int)$config['interval_days'] ?>d
+                Every <?= (int)$config['interval_days'] ?><?= htmlspecialchars($timeConfig['suffix'] ?? 'd') ?>
             </span>
         <?php elseif ($isManaged): ?>
             <span class="badge badge-manual">Manual</span>
@@ -72,7 +72,7 @@ $rowId = 'secret-' . md5($keyId);
             <button class="btn-icon js-open-config-modal" 
                     type="button" 
                     title="Rotate & Configure"
-                    hx-get="/api/config-form?name=<?= urlencode($name) ?>&serviceId=<?= urlencode($serviceId) ?>"
+                    hx-get="/api/config-form?name=<?= urlencode($name) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>"
                     hx-target="#configModal .modal-box"
                     hx-swap="innerHTML">
                 <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>

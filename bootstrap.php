@@ -39,3 +39,24 @@ if (file_exists($envFile)) {
         }
     }
 }
+
+/**
+ * Get rotation time unit configuration
+ * @return array{unit: string, divisor: int, label: string, suffix: string}
+ */
+function getRotationTimeConfig(): array
+{
+    $unit = strtolower(getenv('ROTATION_TIME_UNIT') ?: 'day');
+    
+    $config = [
+        'minute' => ['divisor' => 60, 'label' => 'minutes', 'suffix' => 'm'],
+        'hour'   => ['divisor' => 3600, 'label' => 'hours', 'suffix' => 'h'],
+        'day'    => ['divisor' => 86400, 'label' => 'days', 'suffix' => 'd'],
+    ];
+    
+    if (!isset($config[$unit])) {
+        $unit = 'day'; // fallback to day
+    }
+    
+    return array_merge(['unit' => $unit], $config[$unit]);
+}

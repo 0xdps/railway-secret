@@ -27,6 +27,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
 use App\Service\RailwayClient;
+use App\Service\RailwayCacheService;
 use App\Service\StorageService;
 use App\Service\RotatorService;
 use App\Service\SessionManager;
@@ -34,6 +35,8 @@ use App\Service\SessionManager;
 const LOGIN_WINDOW_SECONDS = 900;
 const LOGIN_MAX_ATTEMPTS = 6;
 const LOGIN_LOCK_SECONDS = 900;
+const CACHE_TTL_SERVICES_SECONDS = 300;
+const CACHE_TTL_VARIABLES_SECONDS = 120;
 
 function getRequiredEnv(string $name): string
 {
@@ -82,6 +85,112 @@ function normalizeEncoding(?string $encoding): ?string
     }
 
     return $encoding;
+}
+
+function cacheKeyServices(string $projectId): string
+{
+    return 'services:' . $projectId;
+}
+
+function cacheKeyVariables(string $projectId, string $environmentId, ?string $serviceId): string
+{
+    $scope = $serviceId ?: 'global';
+    return sprintf('variables:%s:%s:%s', $projectId, $environmentId, $scope);
+}
+
+function getServicesCached(RailwayClient $railway, RailwayCacheService $cache, string $projectId, bool $forceRefresh = false): array
+{
+    $key = cacheKeyServices($projectId);
+    if (!$forceRefresh) {
+        $cached = $cache->get($key);
+        if (is_array($cached)) {
+            return $cached;
+        }
+    }
+
+    $services = $railway->getServices($projectId);
+    $cache->put($key, $services, CACHE_TTL_SERVICES_SECONDS);
+    return $services;
+}
+
+function getVariablesCached(
+    RailwayClient $railway,
+    RailwayCacheService $cache,
+    string $projectId,
+    string $environmentId,
+    ?string $serviceId,
+    bool $forceRefresh = false
+): array {
+    $key = cacheKeyVariables($projectId, $environmentId, $serviceId);
+    if (!$forceRefresh) {
+        $cached = $cache->get($key);
+        if (is_array($cached)) {
+            return $cached;
+        }
+    }
+
+    $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+    $cache->put($key, $variables, CACHE_TTL_VARIABLES_SECONDS);
+    return $variables;
+}
+
+function invalidateVariableCache(RailwayCacheService $cache, string $projectId, string $environmentId, ?string $serviceId): void
+{
+    $cache->delete(cacheKeyVariables($projectId, $environmentId, $serviceId));
+}
+
+function buildGroupedServices(array $services, array $groupMap): array
+{
+    $grouped = [];
+    $hasCustomGroups = false;
+    foreach ($groupMap as $groupName) {
+        if (trim((string)$groupName) !== '') {
+            $hasCustomGroups = true;
+            break;
+        }
+    }
+
+    foreach ($services as $service) {
+        $serviceId = (string)($service['id'] ?? '');
+        $serviceName = (string)($service['name'] ?? '');
+        if ($serviceId === '' || $serviceName === '') {
+            continue;
+        }
+
+        $group = trim((string)($groupMap[$serviceId] ?? ''));
+        if ($group === '') {
+            $group = $hasCustomGroups ? 'Ungrouped' : 'Services';
+        }
+
+        if (!isset($grouped[$group])) {
+            $grouped[$group] = [];
+        }
+        $grouped[$group][] = $service;
+    }
+
+    ksort($grouped, SORT_NATURAL | SORT_FLAG_CASE);
+    foreach ($grouped as $group => $items) {
+        usort($items, static function (array $a, array $b): int {
+            return strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+        });
+        $grouped[$group] = $items;
+    }
+
+    return $grouped;
+}
+
+function buildServiceNameMap(array $services): array
+{
+    $map = [];
+    foreach ($services as $service) {
+        $id = (string)($service['id'] ?? '');
+        $name = (string)($service['name'] ?? '');
+        if ($id !== '' && $name !== '') {
+            $map[$id] = $name;
+        }
+    }
+
+    return $map;
 }
 
 function getClientIp(): string
@@ -281,10 +390,12 @@ try {
     }
 
     $dbPath = __DIR__ . '/../storage/db/secrets.sqlite';
+    $cacheDbPath = __DIR__ . '/../storage/db/railway_cache.sqlite';
 
     $strictCookieMode = trim((string)(getenv('RAILWAY_ENVIRONMENT_NAME') ?: '')) !== '';
     $session = new SessionManager($sessionSecret, $adminKey, $strictCookieMode);
     $railway = new RailwayClient($railwayToken);
+    $cache = new RailwayCacheService($cacheDbPath);
     $storage = new StorageService($dbPath, $masterKey);
     $rotator = new RotatorService($railway, $storage);
 } catch (\Throwable $e) {
@@ -422,6 +533,7 @@ if ($path === '/api/rotate' && $method === 'POST') {
         }
 
         if ($rotator->rotate($keyName, $projectId, $environmentId, $serviceId, $manualValue, $length, $encoding)) {
+            invalidateVariableCache($cache, $projectId, $environmentId, $serviceId);
             sendApiJson(200, ['success' => true]);
         } else {
             sendApiJson(500, ['success' => false, 'error' => 'Rotation failed']);
@@ -505,6 +617,7 @@ if ($path === '/api/config' && $method === 'POST') {
 
         if ($mode === 'rotate_only' || $mode === 'save_and_rotate') {
             $rotator->rotate($name, $projectId, $environmentId, $serviceId, $manualValue, $length, $encoding);
+            invalidateVariableCache($cache, $projectId, $environmentId, $serviceId);
         }
 
         $toastMessage = 'Updated successfully';
@@ -518,7 +631,7 @@ if ($path === '/api/config' && $method === 'POST') {
         header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => $toastMessage, 'type' => 'success']]));
 
         // Return updated table body
-        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $variables = getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId, false);
         $managed = $storage->getManagedSecrets();
         
         ob_start();
@@ -560,7 +673,7 @@ if ($path === '/api/config' && $method === 'DELETE') {
         header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => 'Config removed', 'type' => 'success']]));
 
         // Return updated table body
-        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $variables = getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId, false);
         $managed = $storage->getManagedSecrets();
         
         ob_start();
@@ -576,9 +689,10 @@ if ($path === '/api/config' && $method === 'DELETE') {
 
 if ($path === '/api/secrets-table' && $method === 'GET') {
     $serviceId = $_GET['serviceId'] ?? null;
+    $forceRefresh = ($_GET['refresh'] ?? '0') === '1';
     
     try {
-        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $variables = getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId, $forceRefresh);
         $managed = $storage->getManagedSecrets();
         
         ob_start();
@@ -592,8 +706,99 @@ if ($path === '/api/secrets-table' && $method === 'GET') {
     exit;
 }
 
+if ($path === '/api/rotation-history' && $method === 'GET') {
+    $serviceId = $_GET['serviceId'] ?? null;
+    if ($serviceId === '') {
+        $serviceId = null;
+    }
+
+    try {
+        $services = getServicesCached($railway, $cache, $projectId, false);
+        $serviceNameMap = buildServiceNameMap($services);
+        $recentHistory = $storage->getRecentHistory($serviceId, 30);
+
+        include __DIR__ . '/../src/Views/components/rotation-history-body.php';
+    } catch (\Exception $e) {
+        error_log('Rotation history API error: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal server error';
+    }
+    exit;
+}
+
+if ($path === '/api/cache/refresh' && $method === 'POST') {
+    $scope = $_POST['scope'] ?? 'all';
+    $serviceId = $_POST['serviceId'] ?? null;
+
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+
+        if (!in_array($scope, ['services', 'variables', 'all'], true)) {
+            throw new InvalidArgumentException('Invalid cache scope');
+        }
+
+        if ($scope === 'services' || $scope === 'all') {
+            $cache->delete(cacheKeyServices($projectId));
+            getServicesCached($railway, $cache, $projectId, true);
+        }
+
+        if ($scope === 'variables' || $scope === 'all') {
+            if ($scope === 'all') {
+                $cache->deletePrefix(sprintf('variables:%s:%s:', $projectId, $environmentId));
+            } else {
+                invalidateVariableCache($cache, $projectId, $environmentId, $serviceId ?: null);
+            }
+            getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId ?: null, true);
+        }
+
+        sendApiJson(200, ['success' => true, 'message' => 'Cache refreshed']);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Cache refresh API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
+if ($path === '/api/service-group' && $method === 'POST') {
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+
+        $serviceId = trim((string)($_POST['serviceId'] ?? ''));
+        $groupName = isset($_POST['groupName']) ? trim((string)$_POST['groupName']) : null;
+        if ($serviceId === '') {
+            throw new InvalidArgumentException('Invalid service id');
+        }
+
+        $storage->setServiceGroup($serviceId, $groupName);
+        sendApiJson(200, ['success' => true]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Service group API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 // Docs
 if ($path === '/docs') {
+    $services = [];
+    $groupedServices = [];
+    $timeConfig = getRotationTimeConfig();
+    try {
+        $services = getServicesCached($railway, $cache, $projectId, false);
+        $storage->syncServiceNames($services);
+        $groupedServices = buildGroupedServices($services, $storage->getServiceGroupMap());
+    } catch (\Exception $e) {
+        error_log('Docs Railway services error: ' . $e->getMessage());
+    }
+
     include __DIR__ . '/../src/Views/docs.php';
     exit;
 }
@@ -601,11 +806,20 @@ if ($path === '/docs') {
 // Render Dashboard
 if ($path === '/' || $path === '') {
     $serviceId = $_GET['serviceId'] ?? null;
+    $section = $_GET['section'] ?? 'secrets';
+    if (!in_array($section, ['secrets', 'history'], true)) {
+        $section = 'secrets';
+    }
     $viewTitle = 'Global Variables';
     $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
+    $forceRefresh = ($_GET['refresh'] ?? '0') === '1';
+    $timeConfig = getRotationTimeConfig();
     
     try {
-        $services = $railway->getServices($projectId);
+        $services = getServicesCached($railway, $cache, $projectId, $forceRefresh);
+        $storage->syncServiceNames($services);
+        $groupedServices = buildGroupedServices($services, $storage->getServiceGroupMap());
+        $serviceNameMap = buildServiceNameMap($services);
         
         if ($serviceId) {
             foreach ($services as $s) {
@@ -616,7 +830,14 @@ if ($path === '/' || $path === '') {
             }
         }
 
-        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        if ($section === 'history') {
+            $viewTitle = $serviceId ? ($viewTitle . ' History') : 'Rotation History';
+        }
+
+        $variables = getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId, $forceRefresh);
+        $variablesCacheInfo = $cache->getInfo(cacheKeyVariables($projectId, $environmentId, $serviceId));
+        $cacheFetchedAt = (int)($variablesCacheInfo['fetched_at'] ?? 0);
+        $recentHistory = $storage->getRecentHistory($serviceId ?: null, 30);
         $managed = $storage->getManagedSecrets();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
@@ -628,7 +849,12 @@ if ($path === '/' || $path === '') {
         $error = "Unable to load Railway data right now. Please retry.";
         $variables = [];
         $services = [];
+        $groupedServices = [];
+        $serviceNameMap = [];
         $managed = [];
+        $cacheFetchedAt = 0;
+        $recentHistory = [];
+        $timeConfig = getRotationTimeConfig();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
         } else {

@@ -32,27 +32,52 @@
                 <i data-lucide="layers" style="width:14px;height:14px;"></i>
                 Global Variables
             </a>
+            <?php $historyHref = $serviceId ? '/?serviceId=' . urlencode((string)$serviceId) . '&section=history' : '/?section=history'; ?>
+            <a href="<?= htmlspecialchars($historyHref, ENT_QUOTES, 'UTF-8') ?>"
+               class="nav-link js-history-nav <?= ($section ?? 'secrets') === 'history' ? 'active' : '' ?>"
+               hx-get="<?= htmlspecialchars($historyHref, ENT_QUOTES, 'UTF-8') ?>"
+               hx-target="#mainContent"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               hx-indicator="#mainContentLoading">
+                <i data-lucide="history" style="width:14px;height:14px;"></i>
+                Rotation History
+            </a>
         </nav>
 
-        <?php if (!empty($services)): ?>
-        <div class="sidebar-section-label" style="margin-top:12px;">Services</div>
-        <nav style="overflow-y:auto;flex:1;">
-            <?php foreach ($services as $svc): ?>
-                     <a href="/?serviceId=<?= $svc['id'] ?>" class="nav-link js-scope-nav <?= $serviceId === $svc['id'] ? 'active' : '' ?>"
-                   hx-get="/?serviceId=<?= urlencode($svc['id']) ?>"
-                   hx-target="#mainContent"
-                   hx-swap="outerHTML"
-                   hx-push-url="true"
-                         hx-indicator="#mainContentLoading"
-                   data-service-id="<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>">
-                    <i data-lucide="box" style="width:14px;height:14px;"></i>
-                    <?= htmlspecialchars($svc['name']) ?>
-                </a>
+        <?php if (!empty($groupedServices)): ?>
+        <div style="overflow-y:auto;flex:1;">
+            <?php foreach ($groupedServices as $groupName => $groupItems): ?>
+                <div class="sidebar-section-label" style="margin-top:12px;"><?= htmlspecialchars($groupName) ?></div>
+                <nav>
+                    <?php foreach ($groupItems as $svc): ?>
+                        <div class="service-link-wrap">
+                                     <a href="/?serviceId=<?= $svc['id'] ?>" class="nav-link js-scope-nav <?= (($section ?? 'secrets') !== 'history' && $serviceId === $svc['id']) ? 'active' : '' ?>"
+                               hx-get="/?serviceId=<?= urlencode($svc['id']) ?>"
+                               hx-target="#mainContent"
+                               hx-swap="outerHTML"
+                               hx-push-url="true"
+                               hx-indicator="#mainContentLoading"
+                               data-service-id="<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>">
+                                <i data-lucide="box" style="width:14px;height:14px;"></i>
+                                <?= htmlspecialchars($svc['name']) ?>
+                            </a>
+                            <button type="button"
+                                    class="service-group-edit"
+                                    data-service-id="<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-service-name="<?= htmlspecialchars($svc['name'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-group-name="<?= htmlspecialchars($groupName, ENT_QUOTES, 'UTF-8') ?>"
+                                    title="Set group">
+                                <i data-lucide="folder-cog" style="width:11px;height:11px;"></i>
+                            </button>
+                        </div>
+                    <?php endforeach; ?>
+                </nav>
             <?php endforeach; ?>
-        </nav>
+        </div>
         <?php endif; ?>
 
-        <div class="sidebar-spacer"></div>
+        <!-- <div class="sidebar-spacer"></div> -->
         <div class="sidebar-footer">
             <a href="/docs" class="nav-link">
                 <i data-lucide="book-open" style="width:14px;height:14px;"></i>
@@ -101,6 +126,29 @@
 <div class="modal-overlay" id="configModal">
     <div class="modal-box">
         <!-- Content loaded dynamically by HTMX -->
+    </div>
+</div>
+
+<!-- ── History Detail Modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="historyModal">
+    <div class="modal-box" style="max-width:420px;">
+        <div class="modal-header">
+            <span class="modal-title">Rotation Details</span>
+            <button class="modal-close js-close-history-modal" type="button">
+                <i data-lucide="x" style="width:14px;height:14px;"></i>
+            </button>
+        </div>
+        <div class="history-detail-grid">
+            <div class="history-detail-label">Secret</div>
+            <div class="history-detail-value" id="historyDetailSecret">--</div>
+            <div class="history-detail-label">Service</div>
+            <div class="history-detail-value" id="historyDetailService">--</div>
+            <div class="history-detail-label">Updated At</div>
+            <div class="history-detail-value" id="historyDetailTime">--</div>
+        </div>
+        <div class="modal-actions" style="margin-top:16px;">
+            <button type="button" class="btn btn-primary btn-md js-close-history-modal">Close</button>
+        </div>
     </div>
 </div>
 </body>

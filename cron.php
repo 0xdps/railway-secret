@@ -24,6 +24,9 @@ if (php_sapi_name() !== 'cli') {
 try {
     $masterKey = getRequiredEnv('MASTER_KEY');
     $railwayToken = getRequiredEnv('RAILWAY_TOKEN');
+    
+    // Get rotation time configuration
+    $timeConfig = getRotationTimeConfig();
 
     // Injected automatically by Railway
     $projectId = getenv('RAILWAY_PROJECT_ID') ?: getenv('PROJECT_ID');
@@ -77,13 +80,13 @@ foreach ($managed as $key => $config) {
         $reason = 'first rotation';
     } else {
         $lastRotated = strtotime($history[0]['rotated_at']);
-        $daysSince   = (time() - $lastRotated) / 86400;
+        $elapsed = (time() - $lastRotated) / $timeConfig['divisor'];
 
-        if ($daysSince >= $interval) {
+        if ($elapsed >= $interval) {
             $shouldRotate = true;
-            $reason = sprintf('%.1f days since last rotation (interval: %d days)', $daysSince, $interval);
+            $reason = sprintf('%.1f %s since last rotation (interval: %d %s)', $elapsed, $timeConfig['label'], $interval, $timeConfig['label']);
         } else {
-            $reason = sprintf('%.1f / %d days elapsed', $daysSince, $interval);
+            $reason = sprintf('%.1f / %d %s elapsed', $elapsed, $interval, $timeConfig['label']);
         }
     }
 

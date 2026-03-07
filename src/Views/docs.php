@@ -144,7 +144,23 @@
             </a>
         </nav>
 
-        <div class="sidebar-spacer"></div>
+        <?php if (!empty($groupedServices)): ?>
+        <div style="overflow-y:auto;max-height:42vh;">
+            <?php foreach ($groupedServices as $groupName => $groupItems): ?>
+                <div class="sidebar-section-label" style="margin-top:12px;"><?= htmlspecialchars($groupName) ?></div>
+                <nav>
+                    <?php foreach ($groupItems as $svc): ?>
+                        <a href="/?serviceId=<?= urlencode($svc['id']) ?>" class="nav-link">
+                            <i data-lucide="box" style="width:14px;height:14px;"></i>
+                            <?= htmlspecialchars($svc['name']) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- <div class="sidebar-spacer"></div> -->
         <div class="sidebar-footer">
             <a href="/docs" class="nav-link active">
                 <i data-lucide="book-open" style="width:14px;height:14px;"></i>
@@ -235,6 +251,10 @@
                                 <tr>
                                     <td>TRUSTED_PROXY_IPS</td>
                                     <td>Optional comma-separated proxy IPs to trust for forwarded client IP headers.</td>
+                                </tr>
+                                <tr>
+                                    <td>ROTATION_TIME_UNIT</td>
+                                    <td>Time unit for rotation intervals: <code>day</code>, <code>hour</code>, or <code>minute</code>. Defaults to <code>day</code>. Use <code>minute</code> for testing.</td>
                                 </tr>
                             </tbody>
                         </table>
