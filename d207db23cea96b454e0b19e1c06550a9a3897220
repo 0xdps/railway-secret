@@ -1,0 +1,49 @@
+public/js/dashboard.js
+  27f44e93cd5fd922 5,206-208,241,275-278,287,295,300-303,325-327,412-414,599,630,638-640,658,663,673
+src/Views/components/sidebar.php
+  27f44e93cd5fd922 1-20,32-54,57-74,76-112
+src/Views/layout.php
+  27f44e93cd5fd922 1-74,76-86,90-91,100-126,128-200
+public/style.css
+  27f44e93cd5fd922 151,171-182,601-602,606-617,621,623,628,630,632,638-639,644-645,647-648,651-652,665-666,671,673,675,679-682,685-686,688,707,713,1157-1193
+src/Views/dashboard.php
+  27f44e93cd5fd922 1-25
+public/index.php
+  27f44e93cd5fd922 848-889,910-912,914,936-937
+src/Views/docs.php
+  27f44e93cd5fd922 1-14,132,134-136,138-140,142
+src/Service/StorageService.php
+  27f44e93cd5fd922 38-45,114-119,121-143,145,147,150-151,168-190,216,222,240-282,316-322
+src/Service/RotatorService.php
+  27f44e93cd5fd922 44
+cron.php
+  27f44e93cd5fd922 74-79,82-84,86,88-89,91,94,101
+src/Views/components/config-modal-form.php
+  27f44e93cd5fd922 92-94
+src/Views/components/docs-content.php
+  27f44e93cd5fd922 1-159
+src/Views/components/rotation-history-body.php
+  27f44e93cd5fd922 22-23,30,35-38,41,43,46
+src/Views/components/dashboard-main.php
+  27f44e93cd5fd922 3-5,7-17,23-25,27,30,56,69-88,90-97,99-110,114-118,120-128,130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "d207db23cea96b454e0b19e1c06550a9a3897220",
+  "prompts": {
+    "27f44e93cd5fd922": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4e36263a-f20f-437b-b6a2-2c167e89add9",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 1181,
+      "total_deletions": 267,
+      "accepted_lines": 1016,
+      "overriden_lines": 42
+    }
+  }
+}
