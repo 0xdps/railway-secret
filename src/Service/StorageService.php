@@ -11,6 +11,11 @@ class StorageService
 
     public function __construct(string $dbPath, string $masterKey)
     {
+        $dbDir = dirname($dbPath);
+        if (!is_dir($dbDir) && !mkdir($dbDir, 0775, true) && !is_dir($dbDir)) {
+            throw new \RuntimeException("Unable to create database directory: {$dbDir}");
+        }
+
         $this->db = new SQLite3($dbPath);
         $this->masterKey = $masterKey;
         $this->init();
