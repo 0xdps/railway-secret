@@ -8,6 +8,19 @@ if (PHP_SAPI === 'cli-server') {
     }
 }
 
+$earlyPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$earlyMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+if (($earlyPath === '/health' || $earlyPath === '/healthz') && ($earlyMethod === 'GET' || $earlyMethod === 'HEAD')) {
+    http_response_code(200);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode([
+        'ok' => true,
+        'status' => 'healthy',
+        'timestamp' => gmdate('c'),
+    ]);
+    exit;
+}
+
 require_once __DIR__ . '/../bootstrap.php';
 
 error_reporting(E_ALL);
@@ -291,16 +304,6 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self' https://u
 // Basic Routing
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
-
-// Health checks (unauthenticated)
-if (($path === '/health' || $path === '/healthz') && $method === 'GET') {
-    sendApiJson(200, [
-        'ok' => true,
-        'status' => 'healthy',
-        'timestamp' => gmdate('c'),
-    ]);
-    exit;
-}
 
 // Auth Logic
 if ($path === '/login' && $method === 'POST') {
