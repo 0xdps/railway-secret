@@ -29,4 +29,4 @@ RUN mkdir -p /var/www/html/storage/db && \
 EXPOSE 8080
 
 # Start script to run both Nginx and FPM
-CMD ["sh", "-c", "PORT_TO_USE=${PORT:-8080} && sed -i \"s/listen 80;/listen ${PORT_TO_USE};/\" /etc/nginx/http.d/default.conf && php-fpm -D && nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "PORT_TO_USE=${PORT:-8080} && mkdir -p /var/www/html/storage/db && chown -R www-data:www-data /var/www/html/storage && chmod -R 770 /var/www/html/storage && sed -i \"s/listen 80;/listen ${PORT_TO_USE};/\" /etc/nginx/http.d/default.conf && php-fpm -D && nginx -g 'daemon off;'"]
