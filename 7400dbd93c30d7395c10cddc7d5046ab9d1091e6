@@ -1,0 +1,25 @@
+LICENSE
+  27f44e93cd5fd922 1-21
+README.md
+  27f44e93cd5fd922 13-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "7400dbd93c30d7395c10cddc7d5046ab9d1091e6",
+  "prompts": {
+    "27f44e93cd5fd922": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4e36263a-f20f-437b-b6a2-2c167e89add9",
+        "model": "copilot/auto"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 123,
+      "total_deletions": 1,
+      "accepted_lines": 122,
+      "overriden_lines": 0
+    }
+  }
+}
