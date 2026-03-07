@@ -13,7 +13,7 @@ class RotatorService
         $this->storage = $storage;
     }
 
-    public function rotate(string $keyName, string $projectId, string $environmentId, ?string $serviceId = null, ?string $manualValue = null, ?int $length = null, ?string $encoding = null): bool
+    public function rotate(string $keyName, string $projectId, string $environmentId, ?string $serviceId = null, ?string $manualValue = null, ?int $length = null, ?string $encoding = null, string $triggerType = 'manual'): bool
     {
         // 1. Get dynamic config from storage or use defaults
         $managed = $this->storage->getManagedSecrets();
@@ -35,8 +35,13 @@ class RotatorService
         $success = $this->railway->upsertVariable($projectId, $environmentId, $keyName, $newValue, $serviceId);
 
         if ($success && $oldValue !== null) {
-            // 5. Store old value in local encrypted history
-            $this->storage->addHistory($keyName, $oldValue, $serviceId);
+            // 5. Back-fill the new_secret_value of the PREVIOUS history row now that
+            //    we know what value was set during that rotation (= current value = oldValue).
+            $this->storage->updateLatestHistoryNewValue($keyName, $serviceId, $oldValue);
+
+            // 6. Record this rotation: store only the old value; new value will be
+            //    back-filled the next time this secret is rotated.
+            $this->storage->addHistory($keyName, $oldValue, $serviceId, $triggerType);
             return true;
         }
 

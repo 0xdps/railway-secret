@@ -35,6 +35,14 @@ class StorageService
             $this->db->exec("ALTER TABLE secret_history ADD COLUMN service_id TEXT");
         }
 
+        if (!$this->tableHasColumn('secret_history', 'new_secret_value')) {
+            $this->db->exec("ALTER TABLE secret_history ADD COLUMN new_secret_value TEXT");
+        }
+
+        if (!$this->tableHasColumn('secret_history', 'trigger_type')) {
+            $this->db->exec("ALTER TABLE secret_history ADD COLUMN trigger_type TEXT NOT NULL DEFAULT 'manual'");
+        }
+
         $this->db->exec("CREATE TABLE IF NOT EXISTS managed_secrets (
             secret_name TEXT NOT NULL,
             service_id TEXT,
@@ -103,14 +111,44 @@ class StorageService
         return (bool)$stmt->execute();
     }
 
-    public function addHistory(string $name, string $plainValue, ?string $serviceId = null): bool
+    /**
+     * Back-fill the new_secret_value of the most recent history row for a secret.
+     * Called BEFORE inserting a new rotation so that the previous row's "new value"
+     * equals the current value we're about to rotate away from.
+     */
+    public function updateLatestHistoryNewValue(string $name, ?string $serviceId, string $currentPlainValue): void
     {
-        $encryptedValue = CryptoService::encrypt($plainValue, $this->masterKey);
-        
-        $stmt = $this->db->prepare("INSERT INTO secret_history (secret_name, service_id, secret_value) VALUES (:name, :sid, :val)");
+        $stmt = $this->db->prepare(
+            "SELECT id FROM secret_history
+             WHERE secret_name = :name
+               AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))
+             ORDER BY rotated_at DESC, id DESC
+             LIMIT 1"
+        );
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
-        $stmt->bindValue(':val', $encryptedValue, SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if (!$row) {
+            return;
+        }
+
+        $encrypted = CryptoService::encrypt($currentPlainValue, $this->masterKey);
+        $upd = $this->db->prepare("UPDATE secret_history SET new_secret_value = :val WHERE id = :id");
+        $upd->bindValue(':val', $encrypted, SQLITE3_TEXT);
+        $upd->bindValue(':id', (int)$row['id'], SQLITE3_INTEGER);
+        $upd->execute();
+    }
+
+    public function addHistory(string $name, string $oldPlainValue, ?string $serviceId = null, string $triggerType = 'manual'): bool
+    {
+        $encryptedOldValue = CryptoService::encrypt($oldPlainValue, $this->masterKey);
+        
+        $stmt = $this->db->prepare("INSERT INTO secret_history (secret_name, service_id, secret_value, new_secret_value, trigger_type) VALUES (:name, :sid, :old_val, NULL, :trigger)");
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        $stmt->bindValue(':old_val', $encryptedOldValue, SQLITE3_TEXT);
+        $stmt->bindValue(':trigger', $triggerType, SQLITE3_TEXT);
         $result = $stmt->execute();
 
         // Enforce retention policy (keep last 3 per secret + scope)
@@ -125,6 +163,31 @@ class StorageService
         $cleanup->execute();
 
         return (bool)$result;
+    }
+
+    /**
+     * Returns the unix timestamp of the most recent automatic rotation for a secret,
+     * or null if it has never been auto-rotated.
+     */
+    public function getLastAutoRotatedAt(string $name, ?string $serviceId): ?int
+    {
+        $stmt = $this->db->prepare(
+            "SELECT rotated_at FROM secret_history
+             WHERE secret_name = :name
+               AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))
+               AND trigger_type = 'auto'
+             ORDER BY rotated_at DESC, id DESC
+             LIMIT 1"
+        );
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if (!$row || empty($row['rotated_at'])) {
+            return null;
+        }
+        $ts = strtotime((string)$row['rotated_at']);
+        return $ts !== false ? $ts : null;
     }
 
     public function getHistory(string $name, ?string $serviceId = null): array
@@ -150,13 +213,13 @@ class StorageService
         $limit = max(1, min($limit, 200));
 
         if ($serviceId === null) {
-            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, rotated_at
+            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, trigger_type, rotated_at
                 FROM secret_history
                 ORDER BY datetime(rotated_at) DESC, id DESC
                 LIMIT :limit");
             $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
         } else {
-            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, rotated_at
+            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, trigger_type, rotated_at
                 FROM secret_history
                 WHERE service_id = :sid
                 ORDER BY datetime(rotated_at) DESC, id DESC
@@ -172,6 +235,51 @@ class StorageService
         }
 
         return $rows;
+    }
+
+    public function getHistoryDetailById(int $historyId): ?array
+    {
+        if ($historyId <= 0) {
+            return null;
+        }
+
+        $stmt = $this->db->prepare("SELECT id, secret_name, service_id, secret_value, new_secret_value, trigger_type, rotated_at
+            FROM secret_history
+            WHERE id = :id
+            LIMIT 1");
+        $stmt->bindValue(':id', $historyId, SQLITE3_INTEGER);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC) ?: null;
+        if ($row === null) {
+            return null;
+        }
+
+        $oldValue = null;
+        $newValue = null;
+
+        try {
+            $oldValue = isset($row['secret_value']) ? CryptoService::decrypt((string)$row['secret_value'], $this->masterKey) : null;
+        } catch (\Throwable $e) {
+            $oldValue = null;
+        }
+
+        if (!empty($row['new_secret_value'])) {
+            try {
+                $newValue = CryptoService::decrypt((string)$row['new_secret_value'], $this->masterKey);
+            } catch (\Throwable $e) {
+                $newValue = null;
+            }
+        }
+
+        return [
+            'id' => (int)($row['id'] ?? 0),
+            'secret_name' => (string)($row['secret_name'] ?? ''),
+            'service_id' => isset($row['service_id']) ? (string)$row['service_id'] : null,
+            'rotated_at' => (string)($row['rotated_at'] ?? ''),
+            'trigger_type' => (string)($row['trigger_type'] ?? 'manual'),
+            'old_value' => $oldValue,
+            'new_value' => $newValue,
+        ];
     }
 
     public function syncServiceNames(array $services): void
@@ -203,6 +311,13 @@ class StorageService
             $map[(string)$row['service_id']] = (string)$row['group_name'];
         }
         return $map;
+    }
+
+    public function getServiceCount(): int
+    {
+        $result = $this->db->query("SELECT COUNT(*) AS cnt FROM service_metadata");
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        return (int)($row['cnt'] ?? 0);
     }
 
     public function setServiceGroup(string $serviceId, ?string $groupName): void

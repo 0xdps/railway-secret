@@ -89,11 +89,9 @@
             <div style="font-size:11px;color:var(--text-secondary);">Remove auto-rotation config (does not delete the Railway variable)</div>
         </div>
         <button type="button" 
-                class="btn btn-danger btn-sm"
-                hx-delete="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>"
-                hx-target="#secrets-table-body"
-                hx-swap="innerHTML"
-                hx-confirm="Stop managing '<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>'? This will not delete the variable itself.">
+                   class="btn btn-danger btn-sm js-delete-config"
+                   data-secret-name="<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>"
+                   data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>">
             <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
             Delete Config
         </button>

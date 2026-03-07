@@ -2,6 +2,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const configModal = document.getElementById('configModal');
     const historyModal = document.getElementById('historyModal');
+    const groupModal = document.getElementById('groupModal');
     const csrfToken = document.body.dataset.csrfToken || '';
 
     function refreshIcons() {
@@ -35,9 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const mainContent = document.getElementById('mainContent');
         const currentServiceId = mainContent ? (mainContent.dataset.serviceId || '') : '';
         const currentSection = mainContent ? (mainContent.dataset.section || 'secrets') : 'secrets';
+
+        document.querySelectorAll('.js-overview-nav').forEach((link) => {
+            link.classList.toggle('active', currentSection === 'overview');
+        });
+
         document.querySelectorAll('.js-scope-nav').forEach((link) => {
             const linkServiceId = link.dataset.serviceId || '';
-            link.classList.toggle('active', currentSection !== 'history' && linkServiceId === currentServiceId);
+            link.classList.toggle('active', currentSection === 'secrets' && linkServiceId === currentServiceId);
         });
 
         document.querySelectorAll('.js-history-nav').forEach((link) => {
@@ -136,22 +142,56 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openHistoryModal(secret, service, rotatedAt) {
+    function openHistoryModal(secret, service, rotatedAt, oldValue, newValue, newValueIsLive, triggerType) {
         if (!historyModal) {
             return;
         }
 
         const secretEl = document.getElementById('historyDetailSecret');
         const serviceEl = document.getElementById('historyDetailService');
+        const triggerEl = document.getElementById('historyDetailTrigger');
         const timeEl = document.getElementById('historyDetailTime');
-        if (secretEl) {
-            secretEl.textContent = secret || '--';
+        const oldValueEl = document.getElementById('historyDetailOldValue');
+        const newValueEl = document.getElementById('historyDetailNewValue');
+        const newValueHint = document.getElementById('historyDetailNewValueHint');
+
+        if (secretEl) secretEl.textContent = secret || '--';
+        if (serviceEl) serviceEl.textContent = service || '--';
+        if (timeEl) timeEl.textContent = rotatedAt || '--';
+
+        if (triggerEl) {
+            const isAuto = triggerType === 'auto';
+            triggerEl.innerHTML = `<span class="history-trigger-badge ${isAuto ? 'trigger-auto' : 'trigger-manual'}">${isAuto ? 'Automatic (cron)' : 'Manual'}</span>`;
         }
-        if (serviceEl) {
-            serviceEl.textContent = service || '--';
+
+        if (oldValueEl) {
+            if (oldValue) {
+                oldValueEl.textContent = oldValue;
+                oldValueEl.classList.remove('unavailable');
+            } else {
+                oldValueEl.textContent = 'Unavailable';
+                oldValueEl.classList.add('unavailable');
+            }
         }
-        if (timeEl) {
-            timeEl.textContent = rotatedAt || '--';
+
+        if (newValueEl) {
+            if (newValue) {
+                newValueEl.textContent = newValue;
+                newValueEl.classList.remove('unavailable');
+            } else {
+                newValueEl.textContent = 'Not yet available — rotate again to backfill';
+                newValueEl.classList.add('unavailable');
+            }
+        }
+
+        if (newValueHint) {
+            if (newValueIsLive) {
+                newValueHint.textContent = 'live from Railway';
+                newValueHint.className = 'history-values-hint live-badge';
+            } else {
+                newValueHint.textContent = '(after rotation)';
+                newValueHint.className = 'history-values-hint';
+            }
         }
 
         historyModal.classList.add('open');
@@ -163,11 +203,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function closeGroupModal() {
+        if (groupModal) {
+            groupModal.classList.remove('open');
+        }
+    }
+
     // Make available for any future non-inline integrations.
     window.filterRailwayVars = applyFilters;
 
+    function relativeTime(dateStr) {
+        if (!dateStr) return dateStr;
+        const date = new Date(dateStr.replace(' ', 'T') + 'Z');
+        if (isNaN(date.getTime())) return dateStr;
+        const diffMs = Date.now() - date.getTime();
+        const diffSec = Math.floor(diffMs / 1000);
+        if (diffSec < 60) return 'just now';
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return diffMin + 'm ago';
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return diffHr + 'h ago';
+        const diffDay = Math.floor(diffHr / 24);
+        if (diffDay < 30) return diffDay + 'd ago';
+        return date.toLocaleDateString();
+    }
+
+    function applyRelativeTimes() {
+        document.querySelectorAll('.js-relative-time[data-timestamp]').forEach((el) => {
+            const raw = el.dataset.timestamp;
+            el.textContent = relativeTime(raw);
+            el.title = raw;
+        });
+    }
+
     refreshIcons();
     applyFilters();
+    applyRelativeTimes();
     updateSidebarActive();
     updateDocumentTitle();
     updateCacheStatus();
@@ -201,10 +272,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (groupModal) {
+        groupModal.addEventListener('click', (event) => {
+            if (event.target === groupModal) {
+                closeGroupModal();
+            }
+        });
+    }
+
     window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             closeConfigModal();
             closeHistoryModal();
+            closeGroupModal();
         }
     });
 
@@ -212,11 +292,15 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.addEventListener('htmx:afterSwap', () => {
         refreshIcons();
         applyFilters();
+        applyRelativeTimes();
         updateSidebarActive();
         updateDocumentTitle();
         updateCacheStatus();
     });
-    document.body.addEventListener('htmx:afterSettle', refreshIcons);
+    document.body.addEventListener('htmx:afterSettle', () => {
+        refreshIcons();
+        applyRelativeTimes();
+    });
 
     // Open/close modal controls without inline handlers.
     document.body.addEventListener('click', (event) => {
@@ -235,6 +319,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const closeHistoryBtn = event.target.closest('.js-close-history-modal');
         if (closeHistoryBtn) {
             closeHistoryModal();
+            return;
+        }
+
+        const closeGroupBtn = event.target.closest('.js-close-group-modal');
+        if (closeGroupBtn) {
+            closeGroupModal();
             return;
         }
 
@@ -293,17 +383,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.body.addEventListener('click', (event) => {
-        const historyRow = event.target.closest('.js-history-row');
-        if (!historyRow) {
+    document.body.addEventListener('click', async (event) => {
+        const valuesBtn = event.target.closest('.js-history-values-btn');
+        if (!valuesBtn) {
             return;
         }
 
-        openHistoryModal(
-            historyRow.dataset.historySecret || '',
-            historyRow.dataset.historyService || '',
-            historyRow.dataset.historyRotated || ''
-        );
+        const historyId = valuesBtn.dataset.historyId || '';
+        if (!historyId) {
+            showToast('Missing history entry id', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/rotation-history-detail?id=${encodeURIComponent(historyId)}`);
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.data) {
+                showToast(payload.error || 'Unable to load history values', 'error');
+                return;
+            }
+
+            const data = payload.data;
+            openHistoryModal(
+                data.secret_name || '',
+                data.service || '',
+                data.rotated_at || '',
+                data.old_value || '',
+                data.new_value || '',
+                !!data.new_value_is_live,
+                data.trigger_type || 'manual'
+            );
+        } catch (error) {
+            showToast('Unable to load history values', 'error');
+        }
     });
 
     document.body.addEventListener('click', async (event) => {
@@ -361,9 +473,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             showToast('Cache refreshed from Railway', 'success');
             const currentSection = mainContent ? (mainContent.dataset.section || 'secrets') : 'secrets';
+            const sectionParam = currentSection !== 'secrets' ? `&section=${encodeURIComponent(currentSection)}` : '';
             const nextUrl = serviceId
-                ? `/?serviceId=${encodeURIComponent(serviceId)}&refresh=1${currentSection === 'history' ? '&section=history' : ''}`
-                : `/?refresh=1${currentSection === 'history' ? '&section=history' : ''}`;
+                ? `/?serviceId=${encodeURIComponent(serviceId)}&refresh=1${sectionParam}`
+                : `/?refresh=1${sectionParam}`;
             window.setTimeout(() => {
                 window.location.href = nextUrl;
             }, 250);
@@ -400,40 +513,163 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(message, type);
     });
 
-    document.body.addEventListener('click', async (event) => {
-        const editBtn = event.target.closest('.service-group-edit');
-        if (!editBtn) {
+    const groupModalForm = document.getElementById('groupModalForm');
+    const groupModalTitle = document.getElementById('groupModalTitle');
+    const groupNameInput = document.getElementById('groupNameInput');
+    const groupServicesList = document.getElementById('groupServicesList');
+
+    function collectSidebarServices() {
+        const servicesById = new Map();
+        document.querySelectorAll('.js-grouped-service').forEach((link) => {
+            const id = link.dataset.serviceId || '';
+            const name = link.dataset.serviceName || '';
+            const currentGroup = link.dataset.groupName || '';
+            if (!id || !name) {
+                return;
+            }
+            servicesById.set(id, { id, name, currentGroup });
+        });
+        return Array.from(servicesById.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    function renderGroupServices(services, selectedIds) {
+        if (!groupServicesList) {
             return;
         }
 
-        const serviceId = editBtn.dataset.serviceId || '';
-        const serviceName = editBtn.dataset.serviceName || 'service';
-        const currentGroup = editBtn.dataset.groupName || '';
-        const entered = window.prompt(`Set custom group for ${serviceName} (empty = no group)`, currentGroup === 'Ungrouped' || currentGroup === 'Services' ? '' : currentGroup);
-        if (entered === null) {
+        if (services.length === 0) {
+            groupServicesList.innerHTML = '<div class="form-hint">No services available.</div>';
             return;
         }
 
-        try {
-            const formData = new FormData();
-            formData.append('serviceId', serviceId);
-            formData.append('groupName', entered.trim());
-            formData.append('csrf_token', csrfToken);
+        const rows = services.map((service) => {
+            const checked = selectedIds.has(service.id) ? 'checked' : '';
+            return `<label class="group-service-option" style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;">
+                <input type="checkbox" name="serviceIds[]" value="${service.id}" ${checked}>
+                <span>${service.name}</span>
+            </label>`;
+        });
+        groupServicesList.innerHTML = rows.join('');
+    }
 
-            const response = await fetch('/api/service-group', {
-                method: 'POST',
-                body: formData,
+    function openGroupModal(options) {
+        if (!groupModal || !groupModalTitle || !groupNameInput) {
+            return;
+        }
+
+        const title = options.title || 'Create Group';
+        const groupName = options.groupName || '';
+        const selectedServiceIds = new Set(options.selectedServiceIds || []);
+        const services = collectSidebarServices();
+
+        groupModalTitle.textContent = title;
+        groupNameInput.value = groupName;
+        renderGroupServices(services, selectedServiceIds);
+
+        groupModal.classList.add('open');
+        window.setTimeout(() => groupNameInput.focus(), 20);
+    }
+
+    document.body.addEventListener('click', (event) => {
+        const createBtn = event.target.closest('.js-create-group');
+        if (createBtn) {
+            openGroupModal({
+                title: 'Create Group',
+                groupName: '',
+                selectedServiceIds: [],
             });
-            const payload = await response.json();
-            if (!response.ok || !payload.success) {
-                showToast(payload.error || 'Unable to update service group', 'error');
+            return;
+        }
+
+        const editBtn = event.target.closest('.js-edit-group');
+        if (editBtn) {
+            const currentGroup = editBtn.dataset.groupName || '';
+            const serviceIdsCsv = editBtn.dataset.serviceIds || '';
+            const selectedServiceIds = serviceIdsCsv
+                .split(',')
+                .map((id) => id.trim())
+                .filter((id) => id.length > 0);
+            const initialGroupName = (currentGroup === 'Services' || currentGroup === 'Ungrouped') ? '' : currentGroup;
+            openGroupModal({
+                title: `Edit Group: ${currentGroup}`,
+                groupName: initialGroupName,
+                selectedServiceIds,
+            });
+            return;
+        }
+
+        const deleteBtn = event.target.closest('.js-delete-config');
+        if (!deleteBtn) {
+            return;
+        }
+
+        const secretName = deleteBtn.dataset.secretName || 'this secret';
+        const deleteUrl = deleteBtn.dataset.deleteUrl || '';
+
+        window.confirmDialog(
+            'Stop Managing Secret',
+            `Stop managing '${secretName}'? This will not delete the variable itself.`,
+            async () => {
+                try {
+                    const response = await fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: { 'HX-Request': 'true' },
+                    });
+                    const html = await response.text();
+                    const secretsTable = document.getElementById('secrets-table-body');
+                    if (secretsTable) {
+                        secretsTable.innerHTML = html;
+                        htmx.process(secretsTable);
+                    }
+                } catch (error) {
+                    showToast('Unable to delete config', 'error');
+                }
+            }
+        );
+    });
+
+    if (groupModalForm) {
+        groupModalForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const groupName = (groupNameInput ? groupNameInput.value : '').trim();
+            if (groupName === '') {
+                showToast('Group name is required', 'error');
                 return;
             }
 
-            showToast('Service group updated', 'success');
-            window.location.reload();
-        } catch (error) {
-            showToast('Unable to update service group', 'error');
-        }
-    });
+            const selectedServiceInputs = Array.from(groupModalForm.querySelectorAll('input[name="serviceIds[]"]:checked'));
+            if (selectedServiceInputs.length === 0) {
+                showToast('Select at least one service', 'error');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('groupName', groupName);
+                formData.append('csrf_token', csrfToken);
+                selectedServiceInputs.forEach((input) => {
+                    formData.append('serviceIds[]', input.value);
+                });
+
+                const response = await fetch('/api/service-group/bulk', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.success) {
+                    showToast(payload.error || 'Unable to save group', 'error');
+                    return;
+                }
+
+                if (groupModal) {
+                    groupModal.classList.remove('open');
+                }
+                showToast('Group saved', 'success');
+                window.location.reload();
+            } catch (error) {
+                showToast('Unable to save group', 'error');
+            }
+        });
+    }
 });

@@ -71,29 +71,34 @@ foreach ($managed as $key => $config) {
         continue;
     }
 
-    // Check last rotation time from history
-    $history = $storage->getHistory($secret, $serviceId);
+    // Check last AUTOMATIC rotation time (ignore manual rotations for scheduling).
+    // Apply a 5-minute buffer so a cron that runs slightly late is not double-triggered.
+    $bufferSeconds = 5 * 60; // 5 minutes in seconds
+    $bufferInUnits = $bufferSeconds / $timeConfig['divisor'];
+
+    $lastAutoTs  = $storage->getLastAutoRotatedAt($secret, $serviceId);
     $shouldRotate = false;
 
-    if (empty($history)) {
-        $shouldRotate = true; // Never been rotated — do it now
-        $reason = 'first rotation';
+    if ($lastAutoTs === null) {
+        $shouldRotate = true; // Never been auto-rotated — do it now
+        $reason = 'first automatic rotation';
     } else {
-        $lastRotated = strtotime($history[0]['rotated_at']);
-        $elapsed = (time() - $lastRotated) / $timeConfig['divisor'];
+        $elapsed = (time() - $lastAutoTs) / $timeConfig['divisor'];
 
-        if ($elapsed >= $interval) {
+        // Rotate if we are within the interval window, allowing a 5-min early buffer
+        if ($elapsed >= ($interval - $bufferInUnits)) {
             $shouldRotate = true;
-            $reason = sprintf('%.1f %s since last rotation (interval: %d %s)', $elapsed, $timeConfig['label'], $interval, $timeConfig['label']);
+            $reason = sprintf('%.1f %s since last auto rotation (interval: %d %s, buffer: 5 min)',
+                $elapsed, $timeConfig['label'], $interval, $timeConfig['label']);
         } else {
-            $reason = sprintf('%.1f / %d %s elapsed', $elapsed, $interval, $timeConfig['label']);
+            $reason = sprintf('%.1f / %d %s elapsed since last auto rotation', $elapsed, $interval, $timeConfig['label']);
         }
     }
 
     if ($shouldRotate) {
         echo "  ROTATE {$secret} ({$scopeLabel}) — {$reason}... ";
         try {
-            if ($rotator->rotate($secret, $projectId, $environmentId, $serviceId)) {
+            if ($rotator->rotate($secret, $projectId, $environmentId, $serviceId, null, null, null, 'auto')) {
                 echo "OK\n";
             } else {
                 echo "FAILED (rotator returned false)\n";

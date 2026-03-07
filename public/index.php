@@ -726,6 +726,65 @@ if ($path === '/api/rotation-history' && $method === 'GET') {
     exit;
 }
 
+if ($path === '/api/rotation-history-detail' && $method === 'GET') {
+    $historyId = (int)($_GET['id'] ?? 0);
+
+    try {
+        if ($historyId <= 0) {
+            throw new InvalidArgumentException('Invalid history id');
+        }
+
+        $detail = $storage->getHistoryDetailById($historyId);
+        if ($detail === null) {
+            sendApiJson(404, ['success' => false, 'error' => 'History entry not found']);
+        }
+
+        $serviceId = (string)($detail['service_id'] ?? '');
+        $serviceLabel = 'Global Variables';
+        if ($serviceId !== '') {
+            $services = getServicesCached($railway, $cache, $projectId, false);
+            $serviceNameMap = buildServiceNameMap($services);
+            $serviceLabel = $serviceNameMap[$serviceId] ?? $serviceId;
+        }
+
+        // If new_value is null (latest rotation row), fetch the live current value from Railway
+        $newValue = $detail['new_value'];
+        $newValueIsLive = false;
+        if ($newValue === null) {
+            try {
+                $currentVars = $railway->getVariables($projectId, $environmentId, $serviceId !== '' ? $serviceId : null);
+                $secretName = (string)$detail['secret_name'];
+                if (isset($currentVars[$secretName])) {
+                    $newValue = $currentVars[$secretName];
+                    $newValueIsLive = true;
+                }
+            } catch (\Throwable $e) {
+                // Leave new_value null — not a fatal error
+            }
+        }
+
+        sendApiJson(200, [
+            'success' => true,
+            'data' => [
+                'id' => (int)$detail['id'],
+                'secret_name' => (string)$detail['secret_name'],
+                'service' => $serviceLabel,
+                'rotated_at' => (string)$detail['rotated_at'],
+                'trigger_type' => (string)($detail['trigger_type'] ?? 'manual'),
+                'old_value' => $detail['old_value'],
+                'new_value' => $newValue,
+                'new_value_is_live' => $newValueIsLive,
+            ],
+        ]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Rotation history detail API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 if ($path === '/api/cache/refresh' && $method === 'POST') {
     $scope = $_POST['scope'] ?? 'all';
     $serviceId = $_POST['serviceId'] ?? null;
@@ -786,6 +845,48 @@ if ($path === '/api/service-group' && $method === 'POST') {
     exit;
 }
 
+if ($path === '/api/service-group/bulk' && $method === 'POST') {
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+
+        $groupName = trim((string)($_POST['groupName'] ?? ''));
+        if ($groupName === '') {
+            throw new InvalidArgumentException('Group name is required');
+        }
+
+        $serviceIds = $_POST['serviceIds'] ?? [];
+        if (!is_array($serviceIds)) {
+            $serviceIds = [$serviceIds];
+        }
+
+        $normalizedServiceIds = [];
+        foreach ($serviceIds as $serviceId) {
+            $serviceId = trim((string)$serviceId);
+            if ($serviceId !== '') {
+                $normalizedServiceIds[] = $serviceId;
+            }
+        }
+
+        if (empty($normalizedServiceIds)) {
+            throw new InvalidArgumentException('Select at least one service');
+        }
+
+        foreach ($normalizedServiceIds as $serviceId) {
+            $storage->setServiceGroup($serviceId, $groupName);
+        }
+
+        sendApiJson(200, ['success' => true, 'updated' => count($normalizedServiceIds)]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Bulk service group API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 // Docs
 if ($path === '/docs') {
     $services = [];
@@ -806,11 +907,11 @@ if ($path === '/docs') {
 // Render Dashboard
 if ($path === '/' || $path === '') {
     $serviceId = $_GET['serviceId'] ?? null;
-    $section = $_GET['section'] ?? 'secrets';
-    if (!in_array($section, ['secrets', 'history'], true)) {
-        $section = 'secrets';
+    $section = $_GET['section'] ?? ($serviceId ? 'secrets' : 'overview');
+    if (!in_array($section, ['overview', 'secrets', 'history'], true)) {
+        $section = $serviceId ? 'secrets' : 'overview';
     }
-    $viewTitle = 'Global Variables';
+    $viewTitle = $section === 'overview' ? 'Dashboard Overview' : 'Global Variables';
     $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
     $forceRefresh = ($_GET['refresh'] ?? '0') === '1';
     $timeConfig = getRotationTimeConfig();
@@ -832,6 +933,8 @@ if ($path === '/' || $path === '') {
 
         if ($section === 'history') {
             $viewTitle = $serviceId ? ($viewTitle . ' History') : 'Rotation History';
+        } elseif ($section === 'overview') {
+            $viewTitle = 'Dashboard Overview';
         }
 
         $variables = getVariablesCached($railway, $cache, $projectId, $environmentId, $serviceId, $forceRefresh);
@@ -839,6 +942,7 @@ if ($path === '/' || $path === '') {
         $cacheFetchedAt = (int)($variablesCacheInfo['fetched_at'] ?? 0);
         $recentHistory = $storage->getRecentHistory($serviceId ?: null, 30);
         $managed = $storage->getManagedSecrets();
+        $serviceCount = $storage->getServiceCount();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
         } else {
@@ -854,6 +958,7 @@ if ($path === '/' || $path === '') {
         $managed = [];
         $cacheFetchedAt = 0;
         $recentHistory = [];
+        $serviceCount = $storage->getServiceCount();
         $timeConfig = getRotationTimeConfig();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
