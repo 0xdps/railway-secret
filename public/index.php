@@ -435,6 +435,163 @@ if ($path === '/api/rotate' && $method === 'POST') {
     exit;
 }
 
+// HTMX API Endpoints
+if ($path === '/api/config-form' && $method === 'GET') {
+    $secretName = $_GET['name'] ?? '';
+    $serviceId = $_GET['serviceId'] ?? null;
+    
+    if (!isValidSecretName($secretName)) {
+        http_response_code(400);
+        echo 'Invalid secret name';
+        exit;
+    }
+
+    try {
+        $managed = $storage->getManagedSecrets();
+        $keyId = ($serviceId ?: 'global') . ':' . $secretName;
+        $config = $managed[$keyId] ?? null;
+        
+        include __DIR__ . '/../src/Views/components/config-modal-form.php';
+    } catch (\Exception $e) {
+        error_log('Config form error: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal server error';
+    }
+    exit;
+}
+
+if ($path === '/api/config' && $method === 'POST') {
+    $name = $_POST['name'] ?? '';
+    $serviceId = $_POST['serviceId'] ?? null;
+    $mode = $_POST['mode'] ?? 'save_and_rotate';
+    
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            http_response_code(403);
+            echo 'Invalid CSRF token';
+            exit;
+        }
+
+        if (!isValidSecretName($name)) {
+            http_response_code(400);
+            echo 'Invalid secret name';
+            exit;
+        }
+
+        if (!in_array($mode, ['rotate_only', 'save_only', 'save_and_rotate'], true)) {
+            throw new InvalidArgumentException('Invalid operation mode');
+        }
+
+        $length = normalizeLength(isset($_POST['length']) ? (int)$_POST['length'] : null);
+        $encoding = normalizeEncoding($_POST['encoding'] ?? null);
+        $interval = max(0, (int)($_POST['interval'] ?? 0));
+
+        if ($mode === 'save_only' || $mode === 'save_and_rotate') {
+            $storage->saveConfig($name, $serviceId, [
+                'length' => $length ?? 32,
+                'encoding' => $encoding ?? 'hex',
+                'interval_days' => $interval
+            ]);
+        }
+
+        $manualValue = isset($_POST['manual_value']) ? trim((string)$_POST['manual_value']) : null;
+        if ($manualValue === '') {
+            $manualValue = null;
+        }
+
+        if ($manualValue !== null && strlen($manualValue) > 4096) {
+            throw new InvalidArgumentException('Manual value is too large');
+        }
+
+        if ($mode === 'rotate_only' || $mode === 'save_and_rotate') {
+            $rotator->rotate($name, $projectId, $environmentId, $serviceId, $manualValue, $length, $encoding);
+        }
+
+        $toastMessage = 'Updated successfully';
+        if ($mode === 'save_only') {
+            $toastMessage = 'Config saved';
+        } elseif ($mode === 'rotate_only') {
+            $toastMessage = 'Secret rotated';
+        } elseif ($mode === 'save_and_rotate') {
+            $toastMessage = 'Config saved and secret rotated';
+        }
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => $toastMessage, 'type' => 'success']]));
+
+        // Return updated table body
+        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $managed = $storage->getManagedSecrets();
+        
+        ob_start();
+        include __DIR__ . '/../src/Views/components/secrets-table-body.php';
+        echo ob_get_clean();
+    } catch (\InvalidArgumentException $e) {
+        http_response_code(400);
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => $e->getMessage(), 'type' => 'error']]));
+        echo htmlspecialchars($e->getMessage());
+    } catch (\Exception $e) {
+        error_log('Config API error: ' . $e->getMessage());
+        http_response_code(500);
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => 'Internal server error', 'type' => 'error']]));
+        echo 'Internal server error';
+    }
+    exit;
+}
+
+if ($path === '/api/config' && $method === 'DELETE') {
+    parse_str(file_get_contents('php://input'), $data);
+    $name = $_GET['name'] ?? $data['name'] ?? '';
+    $serviceId = $_GET['serviceId'] ?? $data['serviceId'] ?? null;
+    $csrf = $_GET['csrf_token'] ?? $data['csrf_token'] ?? null;
+    
+    try {
+        if (!$session->validateCsrfToken($csrf)) {
+            http_response_code(403);
+            echo 'Invalid CSRF token';
+            exit;
+        }
+
+        if (!isValidSecretName($name)) {
+            http_response_code(400);
+            echo 'Invalid secret name';
+            exit;
+        }
+
+        $storage->deleteConfig($name, $serviceId);
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => 'Config removed', 'type' => 'success']]));
+
+        // Return updated table body
+        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $managed = $storage->getManagedSecrets();
+        
+        ob_start();
+        include __DIR__ . '/../src/Views/components/secrets-table-body.php';
+        echo ob_get_clean();
+    } catch (\Exception $e) {
+        error_log('Delete config error: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal server error';
+    }
+    exit;
+}
+
+if ($path === '/api/secrets-table' && $method === 'GET') {
+    $serviceId = $_GET['serviceId'] ?? null;
+    
+    try {
+        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $managed = $storage->getManagedSecrets();
+        
+        ob_start();
+        include __DIR__ . '/../src/Views/components/secrets-table-body.php';
+        echo ob_get_clean();
+    } catch (\Exception $e) {
+        error_log('Table refresh error: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal server error';
+    }
+    exit;
+}
+
 // Docs
 if ($path === '/docs') {
     include __DIR__ . '/../src/Views/docs.php';
@@ -445,6 +602,7 @@ if ($path === '/docs') {
 if ($path === '/' || $path === '') {
     $serviceId = $_GET['serviceId'] ?? null;
     $viewTitle = 'Global Variables';
+    $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
     
     try {
         $services = $railway->getServices($projectId);
@@ -460,14 +618,22 @@ if ($path === '/' || $path === '') {
 
         $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
         $managed = $storage->getManagedSecrets();
-        include __DIR__ . '/../src/Views/dashboard.php';
+        if ($isHtmx) {
+            include __DIR__ . '/../src/Views/components/dashboard-main.php';
+        } else {
+            include __DIR__ . '/../src/Views/dashboard.php';
+        }
     } catch (\Exception $e) {
         error_log('Dashboard Railway error: ' . $e->getMessage());
         $error = "Unable to load Railway data right now. Please retry.";
         $variables = [];
         $services = [];
         $managed = [];
-        include __DIR__ . '/../src/Views/dashboard.php';
+        if ($isHtmx) {
+            include __DIR__ . '/../src/Views/components/dashboard-main.php';
+        } else {
+            include __DIR__ . '/../src/Views/dashboard.php';
+        }
     }
     exit;
 }

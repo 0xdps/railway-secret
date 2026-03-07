@@ -1,6 +1,6 @@
-# Rail Rotator
+# Railway Secrets
 
-Rail Rotator is a lightweight PHP dashboard to manage and rotate Railway environment variables for global and service scopes.
+Railway Secrets is a lightweight PHP dashboard to manage and rotate Railway environment variables for global and service scopes.
 
 ## Features
 
@@ -104,7 +104,7 @@ Use this checklist to publish as a Railway template.
    - Choose "Create Template"
    - Select this source repo
    - Add template metadata:
-     - Name: `Rail Rotator`
+   - Name: `Railway Secrets`
      - Description: secret rotation dashboard for Railway variables
      - Category: DevOps / Security
    - Map required env vars with descriptions/defaults where safe

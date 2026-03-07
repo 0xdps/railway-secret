@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>Docs — Rotator</title>
+    <title>Docs — Railway Secrets</title>
     <link rel="stylesheet" href="/style.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
     <script src="/js/docs.js" defer></script>
@@ -132,8 +132,8 @@
     <!-- Sidebar (same as dashboard) -->
     <aside class="sidebar">
         <div class="sidebar-brand">
-            <i data-lucide="shield-check" style="width:16px;height:16px;"></i>
-            Rotator
+            <img src="/favicon.svg" alt="" class="brand-mark" width="16" height="16">
+            Railway Secrets
         </div>
 
         <div class="sidebar-section-label">Project</div>
@@ -164,7 +164,7 @@
         <div class="page-header">
             <div class="page-header-left">
                 <h1>Documentation</h1>
-                <p>How to configure, deploy, and operate the Rotator</p>
+                <p>How to configure, deploy, and operate Railway Secrets</p>
             </div>
         </div>
 
@@ -186,9 +186,9 @@
 
                     <h2 id="how-it-works">How it works</h2>
                     <p>
-                        Rotator manages Railway environment secrets from a single dashboard.
+                        Railway Secrets manages Railway environment secrets from a single dashboard.
                         You configure each secret once — setting its length, encoding, and
-                        auto-rotate interval — and Rotator handles both scheduled and
+                        auto-rotate interval — and Railway Secrets handles both scheduled and
                         on-demand rotation from that same configuration.
                     </p>
                     <ul>
@@ -213,12 +213,12 @@
                                     <td>Railway API token with project-level write access.</td>
                                 </tr>
                                 <tr>
-                                    <td>RAILWAY_RAILWAY_PROJECT_ID</td>
-                                    <td>Injected automatically by Railway. Or set <code>RAILWAY_PROJECT_ID</code> manually.</td>
+                                    <td>RAILWAY_PROJECT_ID</td>
+                                    <td>Auto-injected by Railway for the running service. Fallback <code>PROJECT_ID</code> is also supported by this app.</td>
                                 </tr>
                                 <tr>
-                                    <td>RAILWAY_RAILWAY_ENVIRONMENT_ID</td>
-                                    <td>Injected automatically by Railway. Or set <code>RAILWAY_ENVIRONMENT_ID</code> manually.</td>
+                                    <td>RAILWAY_ENVIRONMENT_ID</td>
+                                    <td>Auto-injected by Railway for the running service. Fallback <code>ENVIRONMENT_ID</code> is also supported by this app.</td>
                                 </tr>
                                 <tr>
                                     <td>ADMIN_KEY</td>
@@ -232,6 +232,10 @@
                                     <td>MASTER_KEY</td>
                                     <td>Encrypts the secret history at rest. <strong>Never lose this</strong> — history becomes unreadable without it.</td>
                                 </tr>
+                                <tr>
+                                    <td>TRUSTED_PROXY_IPS</td>
+                                    <td>Optional comma-separated proxy IPs to trust for forwarded client IP headers.</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -243,7 +247,7 @@
 
                     <h3>On-demand (dashboard)</h3>
                     <p>
-                        Click <strong>Rotate</strong> on any managed secret. Rotator will immediately:
+                        Click <strong>Rotate</strong> on any managed secret. Railway Secrets will immediately:
                     </p>
                     <ul>
                         <li>Generate a new secret with the configured length &amp; encoding.</li>
@@ -295,7 +299,7 @@ php /var/www/html/cron.php
 
                     <h2 id="security">Security model</h2>
                     <ul>
-                        <li><strong>No active secrets stored</strong> — Rotator only saves the <em>previous</em> value after a rotation. The live secret only exists in Railway.</li>
+                        <li><strong>No active secrets stored</strong> — Railway Secrets only saves the <em>previous</em> value after a rotation. The live secret only exists in Railway.</li>
                         <li><strong>AES-256-GCM encryption</strong> — every entry in the history table is encrypted with your <code>MASTER_KEY</code> before being written to disk.</li>
                         <li><strong>Signed sessions</strong> — the browser cookie is both encrypted and HMAC-signed using <code>SESSION_SECRET</code>.</li>
                         <li><strong>CLI-only cron</strong> — <code>cron.php</code> refuses to run outside of the PHP CLI environment.</li>

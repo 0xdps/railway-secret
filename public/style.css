@@ -79,9 +79,14 @@ body {
     margin-bottom: 12px;
 }
 
-.sidebar-brand svg {
+.sidebar-brand svg,
+.sidebar-brand .brand-mark {
     color: var(--accent);
     flex-shrink: 0;
+}
+
+.sidebar-brand .brand-mark {
+    display: block;
 }
 
 .sidebar-section-label {
@@ -239,6 +244,116 @@ body {
 }
 .btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
 .btn-icon.success { color: var(--success); border-color: rgba(34,197,94,0.3); }
+
+.form-control-compact {
+    min-width: 190px;
+    max-width: 240px;
+    height: 30px;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+.refresh-indicator.htmx-request {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+.main-content-loading {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: var(--sidebar-w);
+    background: rgba(10, 10, 15, 0.5);
+    backdrop-filter: blur(1px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 84px;
+    pointer-events: none;
+    z-index: 160;
+}
+
+.main-content-loading-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-overlay);
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding: 7px 12px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+.main-loading-spinner {
+    animation: spin 0.8s linear infinite;
+}
+
+.toast-container {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.toast {
+    min-width: 220px;
+    max-width: 360px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg-overlay);
+    color: var(--text-primary);
+    font-size: 12px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+    animation: toastIn 0.2s ease;
+}
+
+.toast-success {
+    border-color: rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.toast-error {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.toast-hide {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+@keyframes toastIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 
 /* ─── Toggle ─────────────────────────────────────────────────────────────── */
 .toggle-container {
@@ -627,7 +742,15 @@ body {
     font-weight: 600;
     font-size: 14px;
 }
-.auth-logo svg { color: var(--accent); }
+.auth-logo svg,
+.auth-logo .brand-mark {
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.auth-logo .brand-mark {
+    display: block;
+}
 
 .auth-card h1 {
     font-size: 20px;
@@ -648,6 +771,8 @@ body {
 .justify-end { justify-content: flex-end; }
 .gap-2 { gap: 8px; }
 .gap-4 { gap: 16px; }
+.gap-6 { gap: 24px; }
+.gap-8 { gap: 32px; }
 
 /* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {

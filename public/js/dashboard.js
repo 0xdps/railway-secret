@@ -1,15 +1,6 @@
+// Dashboard interactions - CSP-safe HTMX helpers
 document.addEventListener('DOMContentLoaded', () => {
-    const body = document.body;
-    const currentServiceId = body.dataset.currentServiceId || '';
-    const csrfToken = body.dataset.csrfToken || '';
-
     const configModal = document.getElementById('configModal');
-    const confirmModal = document.getElementById('confirmModal');
-    const configForm = document.getElementById('configForm');
-    const deleteZone = document.getElementById('deleteZone');
-    const manualGroup = document.getElementById('manualValueGroup');
-
-    const hasModalUi = Boolean(configModal && confirmModal && configForm && deleteZone && manualGroup);
 
     function refreshIcons() {
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -17,212 +8,150 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    refreshIcons();
-
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => window.location.reload());
-    }
-
-    const toggleRailway = document.getElementById('toggleRailway');
-    function filterRailwayVars() {
-        if (!toggleRailway) {
-            return;
-        }
-
-        const show = toggleRailway.checked;
+    function applyFilters() {
+        const toggleRailway = document.getElementById('toggleRailway');
+        const secretSearch = document.getElementById('secretSearch');
+        const showRailway = toggleRailway ? toggleRailway.checked : true;
+        const query = secretSearch ? secretSearch.value.trim().toLowerCase() : '';
         const rows = document.querySelectorAll('.secret-tr[data-is-railway="1"]');
         rows.forEach((row) => {
-            row.style.display = show ? '' : 'none';
+            const name = (row.dataset.keyName || '').toLowerCase();
+            const matchesRailway = showRailway || row.dataset.isRailway !== '1';
+            const matchesSearch = query === '' || name.includes(query);
+            row.style.display = matchesRailway && matchesSearch ? '' : 'none';
+        });
+
+        const nonRailwayRows = document.querySelectorAll('.secret-tr[data-is-railway="0"]');
+        nonRailwayRows.forEach((row) => {
+            const name = (row.dataset.keyName || '').toLowerCase();
+            const matchesSearch = query === '' || name.includes(query);
+            row.style.display = matchesSearch ? '' : 'none';
         });
     }
 
-    if (toggleRailway) {
-        toggleRailway.addEventListener('change', filterRailwayVars);
-    }
-    filterRailwayVars();
-
-    function closeModal() {
-        if (!configModal) {
-            return;
-        }
-        configModal.classList.remove('open');
-    }
-
-    function openModal(key, existingConfig) {
-        if (!configForm || !deleteZone || !manualGroup || !configModal) {
-            return;
-        }
-
-        configForm.elements.name.value = key;
-        const title = document.getElementById('modalTitle');
-        if (title) {
-            title.textContent = `Rotate & Configure: ${key}`;
-        }
-
-        manualGroup.style.display = 'block';
-
-        if (existingConfig) {
-            configForm.elements.length.value = existingConfig.length;
-            configForm.elements.encoding.value = existingConfig.encoding;
-            configForm.elements.interval.value = existingConfig.interval_days;
-            deleteZone.style.display = 'block';
-        } else {
-            configForm.reset();
-            configForm.elements.name.value = key;
-            configForm.elements.serviceId.value = currentServiceId;
-            configForm.elements.csrf_token.value = csrfToken;
-            configForm.elements.length.value = '32';
-            configForm.elements.encoding.value = 'hex';
-            configForm.elements.interval.value = '30';
-            deleteZone.style.display = 'none';
-        }
-
-        configModal.classList.add('open');
-    }
-
-    function customConfirm({
-        title = 'Are you sure?',
-        message = '',
-        confirmText = 'Confirm',
-        danger = true,
-    } = {}) {
-        return new Promise((resolve) => {
-            if (!confirmModal) {
-                resolve(false);
-                return;
-            }
-
-            const titleEl = document.getElementById('confirmTitle');
-            const msgEl = document.getElementById('confirmMessage');
-            const okBtn = document.getElementById('confirmOkBtn');
-            const cancelBtn = document.getElementById('confirmCancelBtn');
-            const icon = document.getElementById('confirmIcon');
-
-            if (!titleEl || !msgEl || !okBtn || !cancelBtn || !icon) {
-                resolve(false);
-                return;
-            }
-
-            titleEl.textContent = title;
-            msgEl.textContent = message;
-            okBtn.textContent = confirmText;
-
-            okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'} btn-md`;
-            okBtn.style.flex = '1';
-            icon.style.color = danger ? 'var(--danger)' : 'var(--accent)';
-            const iconBox = icon.closest('div');
-            if (iconBox) {
-                iconBox.style.background = danger ? 'var(--danger-bg)' : 'var(--bg-active)';
-                iconBox.style.borderColor = danger ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.2)';
-            }
-
-            confirmModal.classList.add('open');
-            refreshIcons();
-
-            function cleanup(result) {
-                confirmModal.classList.remove('open');
-                okBtn.removeEventListener('click', onOk);
-                cancelBtn.removeEventListener('click', onCancel);
-                resolve(result);
-            }
-
-            const onOk = () => cleanup(true);
-            const onCancel = () => cleanup(false);
-
-            okBtn.addEventListener('click', onOk);
-            cancelBtn.addEventListener('click', onCancel);
-
-            confirmModal.addEventListener(
-                'click',
-                (event) => {
-                    if (event.target === confirmModal) {
-                        cleanup(false);
-                    }
-                },
-                { once: true }
-            );
+    function updateSidebarActive() {
+        const mainContent = document.getElementById('mainContent');
+        const currentServiceId = mainContent ? (mainContent.dataset.serviceId || '') : '';
+        document.querySelectorAll('.js-scope-nav').forEach((link) => {
+            const linkServiceId = link.dataset.serviceId || '';
+            link.classList.toggle('active', linkServiceId === currentServiceId);
         });
     }
 
-    async function deleteConfig() {
-        if (!configForm) {
+    function updateDocumentTitle() {
+        const mainContent = document.getElementById('mainContent');
+        if (!mainContent) {
             return;
         }
 
-        const ok = await customConfirm({
-            title: 'Stop rotating?',
-            message: 'This secret will no longer be auto-rotated. You can re-configure it at any time.',
-            confirmText: 'Stop Rotating',
-        });
-
-        if (!ok) {
+        const viewTitle = (mainContent.dataset.viewTitle || '').trim();
+        if (viewTitle) {
+            document.title = `${viewTitle} — Railway Secrets`;
             return;
         }
 
-        const key = configForm.elements.name.value;
-        const formData = new FormData();
-        formData.append('action', 'delete');
-        formData.append('name', key);
-        formData.append('csrf_token', csrfToken);
-        if (currentServiceId) {
-            formData.append('serviceId', currentServiceId);
-        }
-
-        try {
-            const response = await fetch('/api/manage', { method: 'POST', body: formData });
-            const data = await response.json();
-            if (data.success) {
-                window.location.reload();
-            } else {
-                alert(data.error || 'Action failed');
-            }
-        } catch (error) {
-            alert(error.message);
+        const heading = mainContent.querySelector('.page-header-left h1');
+        if (heading && heading.textContent.trim()) {
+            document.title = `${heading.textContent.trim()} — Railway Secrets`;
         }
     }
 
-    const closeConfigModalBtn = document.getElementById('closeConfigModalBtn');
-    if (closeConfigModalBtn) {
-        closeConfigModalBtn.addEventListener('click', closeModal);
+    function showToast(message, type = 'success') {
+        if (!message) {
+            return;
+        }
+
+        let container = document.getElementById('toastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toastContainer';
+            container.className = 'toast-container';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type === 'error' ? 'error' : 'success'}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.add('toast-hide');
+            setTimeout(() => toast.remove(), 220);
+        }, 2200);
     }
+
+    function openConfigModal() {
+        if (configModal) {
+            configModal.classList.add('open');
+        }
+    }
+
+    function closeConfigModal() {
+        if (configModal) {
+            configModal.classList.remove('open');
+        }
+    }
+
+    // Make available for any future non-inline integrations.
+    window.filterRailwayVars = applyFilters;
+
+    refreshIcons();
+    applyFilters();
+    updateSidebarActive();
+    updateDocumentTitle();
+
+    document.body.addEventListener('change', (event) => {
+        if (event.target && event.target.id === 'toggleRailway') {
+            applyFilters();
+        }
+    });
+
+    document.body.addEventListener('input', (event) => {
+        if (event.target && event.target.id === 'secretSearch') {
+            applyFilters();
+        }
+    });
 
     if (configModal) {
         configModal.addEventListener('click', (event) => {
             if (event.target === configModal) {
-                closeModal();
+                closeConfigModal();
             }
         });
     }
 
-    const deleteConfigBtn = document.getElementById('deleteConfigBtn');
-    if (deleteConfigBtn) {
-        deleteConfigBtn.addEventListener('click', deleteConfig);
-    }
+    window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeConfigModal();
+        }
+    });
 
-    if (hasModalUi) {
-        document.querySelectorAll('.js-open-config').forEach((button) => {
-            button.addEventListener('click', () => {
-                const key = button.dataset.key || '';
-                let existingConfig = null;
-                const rawConfig = button.dataset.config;
+    // HTMX lifecycle hooks for dynamic fragments.
+    document.body.addEventListener('htmx:afterSwap', () => {
+        refreshIcons();
+        applyFilters();
+        updateSidebarActive();
+        updateDocumentTitle();
+    });
+    document.body.addEventListener('htmx:afterSettle', refreshIcons);
 
-                if (rawConfig && rawConfig !== 'null') {
-                    try {
-                        existingConfig = JSON.parse(rawConfig);
-                    } catch (error) {
-                        existingConfig = null;
-                    }
-                }
+    // Open/close modal controls without inline handlers.
+    document.body.addEventListener('click', (event) => {
+        const openBtn = event.target.closest('.js-open-config-modal');
+        if (openBtn) {
+            openConfigModal();
+            return;
+        }
 
-                openModal(key, existingConfig);
-            });
-        });
-    }
+        const closeBtn = event.target.closest('.js-close-config-modal');
+        if (closeBtn) {
+            closeConfigModal();
+            return;
+        }
 
-    document.querySelectorAll('.js-toggle-secret').forEach((button) => {
-        button.addEventListener('click', () => {
-            const row = button.closest('.secret-row');
+        const toggleBtn = event.target.closest('.js-toggle-secret');
+        if (toggleBtn) {
+            const row = toggleBtn.closest('.secret-row');
             if (!row) {
                 return;
             }
@@ -236,126 +165,67 @@ document.addEventListener('DOMContentLoaded', () => {
             span.textContent = isHidden ? span.dataset.value : '••••••••••••';
             span.classList.toggle('revealed', isHidden);
 
-            const icon = button.querySelector('[data-lucide]');
+            const icon = toggleBtn.querySelector('[data-lucide]');
             if (icon) {
                 icon.setAttribute('data-lucide', isHidden ? 'eye-off' : 'eye');
                 refreshIcons();
             }
-        });
+            return;
+        }
     });
 
-    document.querySelectorAll('.js-copy-secret').forEach((button) => {
-        button.addEventListener('click', async () => {
-            const value = button.dataset.secretValue || '';
-            try {
-                await navigator.clipboard.writeText(value);
-                button.classList.add('success');
-
-                const icon = button.querySelector('[data-lucide]');
-                if (icon) {
-                    icon.setAttribute('data-lucide', 'check');
-                    refreshIcons();
-                }
-
-                window.setTimeout(() => {
-                    button.classList.remove('success');
-
-                    const resetIcon = button.querySelector('[data-lucide]');
-                    if (resetIcon) {
-                        resetIcon.setAttribute('data-lucide', 'copy');
-                        refreshIcons();
-                    }
-                }, 2000);
-            } catch (error) {
-                alert('Unable to copy value.');
-            }
-        });
-    });
-
-    if (configForm) {
-        configForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const submitter = event.submitter || document.activeElement;
-        const action = submitter ? submitter.value : '0';
-        const manualValueInput = configForm.elements.manualValue;
-        const manualValue = manualValueInput ? manualValueInput.value : '';
-
-        const submitButtons = configForm.querySelectorAll('button[type="submit"]');
-        submitButtons.forEach((btn) => {
-            btn.disabled = true;
-        });
-
-        const originalText = submitter ? submitter.textContent : '';
-        if (submitter) {
-            submitter.textContent = 'Processing...';
-        }
-
-        const formData = new FormData(configForm);
-
-        function resetButtons() {
-            submitButtons.forEach((btn) => {
-                btn.disabled = false;
-            });
-            if (submitter) {
-                submitter.textContent = originalText;
-            }
-        }
-
-        try {
-            if (action !== 'rotate-only') {
-                const saveData = new FormData(configForm);
-                saveData.append('action', 'save');
-                const saveResponse = await fetch('/api/manage', { method: 'POST', body: saveData });
-                const savePayload = await saveResponse.json();
-                if (!savePayload.success) {
-                    alert(savePayload.error || 'Save failed');
-                    resetButtons();
-                    return;
-                }
-            }
-
-            if (action === '1' || action === 'rotate-only') {
-                const rotateData = new FormData();
-                rotateData.append('key', formData.get('name'));
-                rotateData.append('serviceId', formData.get('serviceId'));
-                rotateData.append('length', formData.get('length'));
-                rotateData.append('encoding', formData.get('encoding'));
-                rotateData.append('csrf_token', csrfToken);
-                if (manualValue) {
-                    rotateData.append('manualValue', manualValue);
-                }
-
-                const rotateResponse = await fetch('/api/rotate', { method: 'POST', body: rotateData });
-                const rotatePayload = await rotateResponse.json();
-                if (!rotatePayload.success) {
-                    alert(`Action failed: ${rotatePayload.error || 'Unknown error'}`);
-                    resetButtons();
-                    return;
-                }
-            }
-
-            window.location.reload();
-        } catch (error) {
-            alert(error.message || 'Action failed');
-            resetButtons();
-        }
-        });
-    }
-
-    window.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') {
+    document.body.addEventListener('click', async (event) => {
+        const copyBtn = event.target.closest('.js-copy-secret');
+        if (!copyBtn) {
             return;
         }
 
-        if (configModal && configModal.classList.contains('open')) {
-            closeModal();
+        const value = copyBtn.dataset.secretValue || '';
+        try {
+            await navigator.clipboard.writeText(value);
+            copyBtn.classList.add('success');
+
+            const icon = copyBtn.querySelector('[data-lucide]');
+            if (icon) {
+                icon.setAttribute('data-lucide', 'check');
+                refreshIcons();
+            }
+
+            setTimeout(() => {
+                copyBtn.classList.remove('success');
+                const resetIcon = copyBtn.querySelector('[data-lucide]');
+                if (resetIcon) {
+                    resetIcon.setAttribute('data-lucide', 'copy');
+                    refreshIcons();
+                }
+            }, 2000);
+        } catch (error) {
+            alert('Unable to copy value.');
+        }
+    });
+
+    // Close modal after successful form submit/delete inside modal.
+    document.body.addEventListener('htmx:afterRequest', (event) => {
+        const detail = event.detail || {};
+        const source = detail.elt;
+        const successful = Boolean(detail.successful);
+        if (!successful || !source) {
+            return;
         }
 
-        if (confirmModal && confirmModal.classList.contains('open')) {
-            const cancel = document.getElementById('confirmCancelBtn');
-            if (cancel) {
-                cancel.click();
-            }
+        if (source.closest && source.closest('#configModal')) {
+            closeConfigModal();
         }
+    });
+
+    document.body.addEventListener('htmx:responseError', () => {
+        showToast('Request failed. Please retry.', 'error');
+    });
+
+    document.body.addEventListener('rotatorToast', (event) => {
+        const detail = event.detail || {};
+        const message = detail.message || detail.value || 'Done';
+        const type = detail.type || 'success';
+        showToast(message, type);
     });
 });

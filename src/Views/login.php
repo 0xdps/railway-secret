@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title>Login — Rotator</title>
+    <title>Login — Railway Secrets</title>
     <link rel="stylesheet" href="/style.css">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
     <script src="/js/icons.js" defer></script>
@@ -12,8 +12,8 @@
 <body class="auth-page">
     <div class="auth-card">
         <div class="auth-logo">
-            <i data-lucide="shield-check" style="width:18px;height:18px;"></i>
-            Rotator
+            <img src="/favicon.svg" alt="" class="brand-mark" width="18" height="18">
+            Railway Secrets
         </div>
 
         <h1>Welcome back</h1>
