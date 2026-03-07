@@ -1,0 +1,43 @@
+README.md
+  27f44e93cd5fd922 1,3,107
+src/Views/dashboard.php
+  27f44e93cd5fd922 7,10,19-20,30,46,73-76,78,103
+public/js/dashboard.js
+  27f44e93cd5fd922 1,83-86,89-91,93,95,98,118,123-125,127,129-131,135-136,138-143,146-149,152-154,168,173,175,177-180,183,185-186,188,190,194-198,201,203,205,207-212,216-217
+src/Views/login.php
+  27f44e93cd5fd922 7,15-16
+public/style.css
+  27f44e93cd5fd922 248-274,308-357
+src/Views/docs.php
+  27f44e93cd5fd922 7,136,167,189,191,216-217,220-221,235-237,250,302
+src/Views/components/dashboard-main.php
+  27f44e93cd5fd922 1-8,10-61
+public/index.php
+  27f44e93cd5fd922 438-465,467-480,485-487,490-494,497-500,519-528,530-533,535-559,561-594
+src/Views/components/config-modal-form.php
+  27f44e93cd5fd922 1-13,15-21,23-63,65-66,68-70,80-101
+src/Views/components/secret-row.php
+  27f44e93cd5fd922 15-71,73-76,78-82
+src/Views/components/secrets-table-body.php
+  27f44e93cd5fd922 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "5d58ec6d2781a379e229d37a7b789dd500d85e63",
+  "prompts": {
+    "27f44e93cd5fd922": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4e36263a-f20f-437b-b6a2-2c167e89add9",
+        "model": "copilot/auto"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 663,
+      "total_deletions": 526,
+      "accepted_lines": 570,
+      "overriden_lines": 13
+    }
+  }
+}
