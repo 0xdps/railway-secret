@@ -22,7 +22,8 @@ COPY . .
 
 # Ensure storage is writable
 RUN mkdir -p /var/www/html/storage/db && \
-    chmod -R 777 /var/www/html/storage
+    chown -R www-data:www-data /var/www/html/storage && \
+    chmod -R 770 /var/www/html/storage
 
 # Expose port
 EXPOSE 80

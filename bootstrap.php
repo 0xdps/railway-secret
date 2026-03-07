@@ -20,7 +20,6 @@ spl_autoload_register(function ($class) {
 // Simple .env loader
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
-    error_log("Found .env file at $envFile");
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         $line = trim($line);
@@ -37,9 +36,6 @@ if (file_exists($envFile)) {
             putenv(sprintf('%s=%s', $name, $value));
             $_ENV[$name] = $value;
             $_SERVER[$name] = $value;
-            error_log("Loaded Env: $name");
         }
     }
-} else {
-    error_log("No .env file found at $envFile");
 }

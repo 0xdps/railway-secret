@@ -85,17 +85,34 @@ class RailwayClient
     public function getVariables(string $projectId, string $environmentId, ?string $serviceId = null): array
     {
         if (!empty($serviceId)) {
+            // Newer Railway schemas expose service variables via the top-level
+            // `variables` field with an optional `serviceId` argument.
             $query = '
-            query GetServiceVariables($serviceId: String!, $environmentId: String!) {
-              service(id: $serviceId) {
-                variables(environmentId: $environmentId)
-              }
+            query GetScopedVariables($projectId: String!, $environmentId: String!, $serviceId: String) {
+              variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
             }';
-            $data = $this->request($query, [
-                'serviceId' => $serviceId,
-                'environmentId' => $environmentId
-            ]);
-            return $data['service']['variables'] ?? [];
+
+            try {
+                return $this->request($query, [
+                    'projectId' => $projectId,
+                    'environmentId' => $environmentId,
+                    'serviceId' => $serviceId,
+                ])['variables'] ?? [];
+            } catch (\Exception $e) {
+                // Backward compatibility fallback for older schemas.
+                $legacyQuery = '
+                query GetServiceVariables($serviceId: String!, $environmentId: String!) {
+                  service(id: $serviceId) {
+                    variables(environmentId: $environmentId)
+                  }
+                }';
+
+                $data = $this->request($legacyQuery, [
+                    'serviceId' => $serviceId,
+                    'environmentId' => $environmentId,
+                ]);
+                return $data['service']['variables'] ?? [];
+            }
         }
 
         $query = '

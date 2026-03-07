@@ -1,5 +1,13 @@
 <?php
 
+if (PHP_SAPI === 'cli-server') {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    $assetPath = __DIR__ . $requestPath;
+    if (is_file($assetPath)) {
+        return false;
+    }
+}
+
 require_once __DIR__ . '/../bootstrap.php';
 
 error_reporting(E_ALL);
@@ -65,17 +73,53 @@ function normalizeEncoding(?string $encoding): ?string
 
 function getClientIp(): string
 {
+    $remote = $_SERVER['REMOTE_ADDR'] ?? '';
+    $remote = is_string($remote) ? trim($remote) : '';
+
+    if (!isTrustedProxy($remote)) {
+        return $remote !== '' ? $remote : 'unknown';
+    }
+
     $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
     if (is_string($forwarded) && $forwarded !== '') {
         $parts = explode(',', $forwarded);
-        $first = trim($parts[0]);
-        if ($first !== '') {
-            return $first;
+        foreach ($parts as $part) {
+            $candidate = trim($part);
+            if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                return $candidate;
+            }
         }
     }
 
-    $remote = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
-    return is_string($remote) ? $remote : 'unknown';
+    $realIp = $_SERVER['HTTP_X_REAL_IP'] ?? '';
+    if (is_string($realIp)) {
+        $realIp = trim($realIp);
+        if (filter_var($realIp, FILTER_VALIDATE_IP)) {
+            return $realIp;
+        }
+    }
+
+    return $remote !== '' ? $remote : 'unknown';
+}
+
+function isTrustedProxy(string $ip): bool
+{
+    if ($ip === '' || $ip === '127.0.0.1' || $ip === '::1') {
+        return true;
+    }
+
+    $trusted = trim((string)(getenv('TRUSTED_PROXY_IPS') ?: ''));
+    if ($trusted !== '') {
+        foreach (explode(',', $trusted) as $candidate) {
+            if (trim($candidate) === $ip) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Fallback: trust private/reserved network hops when explicit list is not configured.
+    return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
 }
 
 function loginRateLimiterDbPath(): string
@@ -242,7 +286,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://unpkg.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
 
 // Basic Routing
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -405,7 +449,8 @@ if ($path === '/' || $path === '') {
         $managed = $storage->getManagedSecrets();
         include __DIR__ . '/../src/Views/dashboard.php';
     } catch (\Exception $e) {
-        $error = "Railway Connection Error: " . $e->getMessage();
+        error_log('Dashboard Railway error: ' . $e->getMessage());
+        $error = "Unable to load Railway data right now. Please retry.";
         $variables = [];
         $services = [];
         $managed = [];

@@ -6,9 +6,10 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title><?= htmlspecialchars($viewTitle) ?> — Rotator</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+    <script src="/js/dashboard.js" defer></script>
 </head>
-<body>
+<body data-current-service-id="<?= htmlspecialchars((string)$serviceId, ENT_QUOTES, 'UTF-8') ?>" data-csrf-token="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
 <div class="app-layout">
 
     <!-- ── Sidebar ────────────────────────────────────────────────── -->
@@ -65,11 +66,11 @@
             </div>
             <div class="flex items-center gap-4">
                 <label class="toggle-container" title="Show/Hide variables injected by Railway (prefixed with RAILWAY_)">
-                    <input type="checkbox" id="toggleRailway" onchange="filterRailwayVars()">
+                    <input type="checkbox" id="toggleRailway">
                     <span class="toggle-label">Show Railway Vars</span>
                     <div class="toggle-switch"></div>
                 </label>
-                <button class="btn btn-ghost btn-sm" onclick="location.reload()">
+                <button class="btn btn-ghost btn-sm" id="refreshBtn" type="button">
                     <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>
                     Refresh
                 </button>
@@ -88,6 +89,12 @@
 
             <div class="panel">
                 <table class="data-table">
+                    <colgroup>
+                        <col style="width: 52%;">
+                        <col style="width: 19%;">
+                        <col style="width: 21%;">
+                        <col style="width: 8%;">
+                    </colgroup>
                     <thead>
                         <tr>
                             <th>Secret</th>
@@ -126,10 +133,10 @@
                                         <span class="secret-value"
                                               data-value="<?= htmlspecialchars($value) ?>"
                                               title="Click to view">••••••••••••</span>
-                                        <button class="btn-icon" onclick="toggleSecret(this)" title="Toggle visibility">
+                                        <button class="btn-icon js-toggle-secret" type="button" title="Toggle visibility">
                                             <i data-lucide="eye" style="width:12px;height:12px;"></i>
                                         </button>
-                                        <button class="btn-icon" onclick="copySecret('<?= htmlspecialchars(addslashes($value)) ?>', this)" title="Copy">
+                                        <button class="btn-icon js-copy-secret" type="button" data-secret-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>" title="Copy">
                                             <i data-lucide="copy" style="width:12px;height:12px;"></i>
                                         </button>
                                     </div>
@@ -161,8 +168,9 @@
                                 <!-- Actions -->
                                 <td>
                                     <div class="actions-cell">
-                                        <button class="btn-icon" title="Rotate & Configure"
-                                            onclick="openModal('<?= htmlspecialchars($name) ?>', <?= htmlspecialchars(json_encode($config)) ?>)">
+                                        <button class="btn-icon js-open-config" type="button" title="Rotate & Configure"
+                                            data-key="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-config='<?= htmlspecialchars(json_encode($config, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
                                             <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
                                         </button>
                                     </div>
@@ -201,7 +209,7 @@
     <div class="modal-box">
         <div class="modal-header">
             <span class="modal-title" id="modalTitle">Configure Rotation</span>
-            <button class="modal-close" onclick="closeModal()">
+            <button class="modal-close" id="closeConfigModalBtn" type="button">
                 <i data-lucide="x" style="width:14px;height:14px;"></i>
             </button>
         </div>
@@ -261,233 +269,13 @@
             <!-- Danger zone: only shown for existing configs -->
             <div id="deleteZone" style="display:none; margin-top:12px; padding-top:12px; border-top:1px solid var(--border); text-align:center;">
                 <button type="button"
+                    id="deleteConfigBtn"
                     style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;text-decoration:underline;text-underline-offset:2px;"
-                    onclick="deleteConfig()">
                     Remove from managed secrets
                 </button>
             </div>
         </form>
     </div>
 </div>
-
-<script>
-lucide.createIcons();
-const currentServiceId = <?= json_encode($serviceId) ?>;
-const csrfToken = <?= json_encode($csrfToken) ?>;
-
-// ── Confirm dialog ────────────────────────────────────────────────
-function customConfirm({ title = 'Are you sure?', message = '', confirmText = 'Confirm', danger = true } = {}) {
-    return new Promise((resolve) => {
-        const overlay  = document.getElementById('confirmModal');
-        const titleEl  = document.getElementById('confirmTitle');
-        const msgEl    = document.getElementById('confirmMessage');
-        const okBtn    = document.getElementById('confirmOkBtn');
-        const cancelBtn = document.getElementById('confirmCancelBtn');
-        const icon     = document.getElementById('confirmIcon');
-
-        titleEl.textContent  = title;
-        msgEl.textContent    = message;
-        okBtn.textContent    = confirmText;
-
-        okBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'} btn-md`;
-        okBtn.style.flex = '1';
-        icon.style.color = danger ? 'var(--danger)' : 'var(--accent)';
-        icon.closest('div').style.background  = danger ? 'var(--danger-bg)' : 'var(--bg-active)';
-        icon.closest('div').style.borderColor = danger ? 'rgba(239,68,68,0.2)' : 'rgba(99,102,241,0.2)';
-
-        overlay.classList.add('open');
-        lucide.createIcons();
-
-        function cleanup(result) {
-            overlay.classList.remove('open');
-            okBtn.removeEventListener('click', onOk);
-            cancelBtn.removeEventListener('click', onCancel);
-            resolve(result);
-        }
-        const onOk     = () => cleanup(true);
-        const onCancel = () => cleanup(false);
-
-        okBtn.addEventListener('click', onOk);
-        cancelBtn.addEventListener('click', onCancel);
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); }, { once: true });
-    });
-}
-
-// ── Config Modal ──────────────────────────────────────────────────
-function openModal(key, existingConfig) {
-    document.getElementById('configKey').value = key;
-    document.getElementById('modalTitle').innerText = 'Rotate & Configure: ' + key;
-    
-    const form       = document.getElementById('configForm');
-    const deleteZone = document.getElementById('deleteZone');
-    const manualGrp  = document.getElementById('manualValueGroup');
-
-    // Always show manual input in this unified layout
-    manualGrp.style.display = 'block';
-
-    if (existingConfig) {
-        form.elements['length'].value   = existingConfig.length;
-        form.elements['encoding'].value = existingConfig.encoding;
-        form.elements['interval'].value = existingConfig.interval_days;
-        deleteZone.style.display = 'block';
-    } else {
-        form.reset();
-        form.elements['name'].value = key;
-        deleteZone.style.display = 'none';
-        // Defaults
-        form.elements['length'].value = "32";
-        form.elements['encoding'].value = "hex";
-        form.elements['interval'].value = "30";
-    }
-    document.getElementById('configModal').classList.add('open');
-}
-
-function closeModal() {
-    document.getElementById('configModal').classList.remove('open');
-}
-
-document.getElementById('configModal').addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-});
-
-// ── Form submit ────────────────────────────────────────────────────
-document.getElementById('configForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const submitter = e.submitter || document.activeElement;
-    const action = submitter ? submitter.value : "0";
-    const manualValue = e.target.elements['manualValue'] ? e.target.elements['manualValue'].value : '';
-
-    const btns = e.target.querySelectorAll('button[type="submit"]');
-    btns.forEach(b => b.disabled = true);
-    
-    const originalText = submitter ? submitter.textContent : '';
-    if (submitter) submitter.textContent = 'Processing…';
-
-    const formData = new FormData(e.target);
-
-    try {
-        // 1. If not 'rotate-only', save config first
-        if (action !== "rotate-only") {
-            const saveFormData = new FormData(e.target);
-            saveFormData.append('action', 'save');
-            const r = await fetch('/api/manage', { method: 'POST', body: saveFormData });
-            const d = await r.json();
-            
-            if (!d.success) {
-                alert(d.error);
-                resetButtons();
-                return;
-            }
-        }
-
-        // 2. Rotate if requested
-        if (action === "1" || action === "rotate-only") {
-            const rotData = new FormData();
-            rotData.append('key', formData.get('name'));
-            rotData.append('serviceId', formData.get('serviceId'));
-            rotData.append('length', formData.get('length'));
-            rotData.append('encoding', formData.get('encoding'));
-            rotData.append('csrf_token', csrfToken);
-            if (manualValue) {
-                rotData.append('manualValue', manualValue);
-            }
-
-            const rotR = await fetch('/api/rotate', { method: 'POST', body: rotData });
-            const rotD = await rotR.json();
-            if (!rotD.success) {
-                alert("Action failed: " + rotD.error);
-            }
-        }
-
-        location.reload();
-    } catch (err) {
-        alert(err.message);
-        resetButtons();
-    }
-
-    function resetButtons() {
-        btns.forEach(b => b.disabled = false);
-        if (submitter) submitter.textContent = originalText;
-    }
-};
-
-// ── Delete ───────────────────────────────────────────────────────
-async function deleteConfig() {
-    const ok = await customConfirm({
-        title: 'Stop rotating?',
-        message: 'This secret will no longer be auto-rotated. You can re-configure it at any time.',
-        confirmText: 'Stop Rotating',
-    });
-    if (!ok) return;
-    const key = document.getElementById('configKey').value;
-    const formData = new FormData();
-    formData.append('action', 'delete');
-    formData.append('name', key);
-    formData.append('csrf_token', csrfToken);
-    if (currentServiceId) formData.append('serviceId', currentServiceId);
-
-    try {
-        const r = await fetch('/api/manage', { method: 'POST', body: formData });
-        const d = await r.json();
-        if (d.success) location.reload(); else alert(d.error);
-    } catch (err) { alert(err.message); }
-}
-
-// ── Toggle secret visibility ───────────────────────────────────────
-function toggleSecret(btn) {
-    const row  = btn.closest('.secret-row');
-    const span = row.querySelector('.secret-value');
-    const icon = btn.querySelector('i');
-    const isHidden = span.textContent.trim() === '••••••••••••';
-
-    span.textContent = isHidden ? span.dataset.value : '••••••••••••';
-    span.classList.toggle('revealed', isHidden);
-    icon.setAttribute('data-lucide', isHidden ? 'eye-off' : 'eye');
-    lucide.createIcons();
-}
-
-// ── Copy ───────────────────────────────────────────────────────────
-async function copySecret(val, btn) {
-    await navigator.clipboard.writeText(val);
-    const icon = btn.querySelector('i');
-    icon.setAttribute('data-lucide', 'check');
-    btn.classList.add('success');
-    lucide.createIcons();
-    setTimeout(() => {
-        icon.setAttribute('data-lucide', 'copy');
-        btn.classList.remove('success');
-        lucide.createIcons();
-    }, 2000);
-}
-
-
-
-// ── Global shortcuts ──────────────────────────────────────────────
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        // If config modal is open, close it
-        const configModal = document.getElementById('configModal');
-        if (configModal.classList.contains('open')) {
-            closeModal();
-        }
-        
-        // If confirm modal is open, cancel it (clicks the cancel btn)
-        const confirmModal = document.getElementById('confirmModal');
-        if (confirmModal.classList.contains('open')) {
-            document.getElementById('confirmCancelBtn').click();
-        }
-    }
-});
-// ── Filter Railway Vars ───────────────────────────────────────────
-function filterRailwayVars() {
-    const show = document.getElementById('toggleRailway').checked;
-    const rows = document.querySelectorAll('.secret-tr[data-is-railway="1"]');
-    rows.forEach(row => {
-        row.style.display = show ? '' : 'none';
-    });
-}
-// Run on load
-document.addEventListener('DOMContentLoaded', filterRailwayVars);
-</script>
 </body>
 </html>

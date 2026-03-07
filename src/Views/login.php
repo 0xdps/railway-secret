@@ -6,7 +6,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Login — Rotator</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+    <script src="/js/icons.js" defer></script>
 </head>
 <body class="auth-page">
     <div class="auth-card">
@@ -37,7 +38,5 @@
             </button>
         </form>
     </div>
-
-    <script>lucide.createIcons();</script>
 </body>
 </html>

@@ -6,7 +6,8 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <title>Docs — Rotator</title>
     <link rel="stylesheet" href="/style.css">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+    <script src="/js/docs.js" defer></script>
     <style>
         .docs-layout { display: flex; gap: 40px; }
         .docs-toc {
@@ -306,40 +307,5 @@ php /var/www/html/cron.php
     </div><!-- /main-content -->
 </div>
 
-<script>
-lucide.createIcons();
-
-// ── Scroll-spy ────────────────────────────────────────────────────
-// The sticky page-header is ~76px tall; add a small lead so the
-// heading is considered "reached" just as it clears the header.
-const OFFSET = 90;
-
-const headings = Array.from(document.querySelectorAll('.docs-body h2[id]'));
-const tocLinks  = Array.from(document.querySelectorAll('.docs-toc a'));
-
-function setActive(id) {
-    tocLinks.forEach(l => {
-        l.classList.toggle('active', l.getAttribute('href') === '#' + id);
-    });
-}
-
-function onScroll() {
-    // scrollY is document-relative; so is offsetTop — no viewport math needed.
-    const scrollPos = window.scrollY + OFFSET;
-
-    // Walk every heading; keep updating `active` as long as the heading's
-    // top is at or above the scroll position. The last match wins.
-    let active = headings[0];
-    for (const h of headings) {
-        if (h.offsetTop <= scrollPos) {
-            active = h;
-        }
-    }
-    setActive(active.id);
-}
-
-onScroll();
-window.addEventListener('scroll', onScroll, { passive: true });
-</script>
 </body>
 </html>
