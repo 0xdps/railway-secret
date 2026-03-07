@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Shield body -->
+  <path d="M16 2L4 7v9c0 6.4 5.1 12.4 12 14 6.9-1.6 12-7.6 12-14V7L16 2z" fill="#6366f1"/>
+  <!-- Rotate arrow (circular, clockwise, gap at bottom-left) -->
+  <path d="M16 10a6 6 0 0 1 5.83 4.58"
+        stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M16 22a6 6 0 0 1-5.83-4.58"
+        stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- Arrowhead top-right -->
+  <polyline points="20.5,12.5 21.83,14.58 23.9,13.2" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Arrowhead bottom-left -->
+  <polyline points="11.5,19.5 10.17,17.42 8.1,18.8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
