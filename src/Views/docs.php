@@ -213,12 +213,12 @@
                                     <td>Railway API token with project-level write access.</td>
                                 </tr>
                                 <tr>
-                                    <td>RAILWAY_PROJECT_ID</td>
-                                    <td>Injected automatically by Railway. Or set <code>PROJECT_ID</code> manually.</td>
+                                    <td>RAILWAY_RAILWAY_PROJECT_ID</td>
+                                    <td>Injected automatically by Railway. Or set <code>RAILWAY_PROJECT_ID</code> manually.</td>
                                 </tr>
                                 <tr>
-                                    <td>RAILWAY_ENVIRONMENT_ID</td>
-                                    <td>Injected automatically by Railway. Or set <code>ENVIRONMENT_ID</code> manually.</td>
+                                    <td>RAILWAY_RAILWAY_ENVIRONMENT_ID</td>
+                                    <td>Injected automatically by Railway. Or set <code>RAILWAY_ENVIRONMENT_ID</code> manually.</td>
                                 </tr>
                                 <tr>
                                     <td>ADMIN_KEY</td>

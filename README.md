@@ -24,8 +24,8 @@ Rail Rotator is a lightweight PHP dashboard to manage and rotate Railway environ
 Create `.env` from `.env.example` and set:
 
 - `RAILWAY_TOKEN`
-- `PROJECT_ID` or `RAILWAY_PROJECT_ID`
-- `ENVIRONMENT_ID` or `RAILWAY_ENVIRONMENT_ID`
+- `RAILWAY_PROJECT_ID` or `RAILWAY_RAILWAY_PROJECT_ID`
+- `RAILWAY_ENVIRONMENT_ID` or `RAILWAY_RAILWAY_ENVIRONMENT_ID`
 - `ADMIN_KEY`
 - `SESSION_SECRET`
 - `MASTER_KEY`

@@ -26,13 +26,13 @@ try {
     $railwayToken = getRequiredEnv('RAILWAY_TOKEN');
 
     // Injected automatically by Railway
-    $projectId = getenv('RAILWAY_PROJECT_ID') ?: getenv('PROJECT_ID');
-    $environmentId = getenv('RAILWAY_ENVIRONMENT_ID') ?: getenv('ENVIRONMENT_ID');
+    $projectId = getenv('RAILWAY_RAILWAY_PROJECT_ID') ?: getenv('RAILWAY_PROJECT_ID');
+    $environmentId = getenv('RAILWAY_RAILWAY_ENVIRONMENT_ID') ?: getenv('RAILWAY_ENVIRONMENT_ID');
     if ($projectId === false || trim((string)$projectId) === '') {
-        throw new RuntimeException('Missing required configuration: RAILWAY_PROJECT_ID or PROJECT_ID');
+        throw new RuntimeException('Missing required configuration: RAILWAY_RAILWAY_PROJECT_ID or RAILWAY_PROJECT_ID');
     }
     if ($environmentId === false || trim((string)$environmentId) === '') {
-        throw new RuntimeException('Missing required configuration: RAILWAY_ENVIRONMENT_ID or ENVIRONMENT_ID');
+        throw new RuntimeException('Missing required configuration: RAILWAY_RAILWAY_ENVIRONMENT_ID or RAILWAY_ENVIRONMENT_ID');
     }
 
     $dbPath = __DIR__ . '/storage/db/secrets.sqlite';
