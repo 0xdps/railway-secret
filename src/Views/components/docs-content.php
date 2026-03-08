@@ -39,13 +39,13 @@
                 </p>
                 <p style="margin-top: 10px;">
                     There are two actors that drive rotation: the <strong>dashboard</strong>
-                    (you, on demand) and the <strong>cron service</strong> (automated,
+                    (you, on demand) and the <strong>built-in cron</strong> (automated,
                     on schedule). Both share the same configuration and the same
-                    encrypted storage volume &mdash; no state is duplicated.
+                    encrypted storage.
                 </p>
                 <ul style="margin-top: 10px;">
                     <li><strong>Click Rotate</strong> on any managed secret to rotate instantly.</li>
-                    <li>The <strong>cron service</strong> runs <code>cron.php</code> and rotates every secret whose interval has elapsed since its last rotation.</li>
+                    <li>The <strong>built-in cron</strong> runs <code>cron.php</code> every minute inside the container and rotates every secret whose interval has elapsed since its last rotation.</li>
                     <li>Every rotation writes the <em>previous</em> value &mdash; AES-256-GCM encrypted &mdash; to SQLite. You can inspect or copy it from Rotation History.</li>
                     <li>Unmanaged secrets (no config yet) are listed but never rotated automatically.</li>
                 </ul>
@@ -119,37 +119,18 @@
 
                 <h3>Scheduled (cron)</h3>
                 <p>
-                    The cron service executes <code>php cron.php</code> on your defined schedule.
+                    <code>crond</code> runs inside the container and executes <code>cron.php</code> every minute.
                     On each run it reads all managed secrets from the database and rotates
                     any secret whose <strong>Rotation Interval</strong> has elapsed since the
-                    secret's last recorded rotation.
+                    secret's last recorded rotation. No separate cron service is needed.
                 </p>
 
                 <div class="callout callout-info">
                     <i data-lucide="info" style="width:14px;height:14px;"></i>
-                    <span>Set <strong>Rotation Interval</strong> to <code>0</code> to make a secret manual-only. The cron job skips any secret with an interval of zero.</span>
-                </div>
-
-                <h3>Setting up a Railway Cron Service</h3>
-                <p>Create a separate <strong>Cron Service</strong> in Railway pointing at the same repository with the following start command:</p>
-                <pre><code>php /var/www/html/cron.php</code></pre>
-                <p>Choose a cron schedule that matches your rotation policy:</p>
-                <pre><code># Daily at 03:00 UTC
-0 3 * * *
-
-# Weekly — every Sunday at 03:00 UTC
-0 3 * * 0
-
-# Monthly — 1st of the month at 03:00 UTC
-0 3 1 * *</code></pre>
-
-                <div class="callout callout-warn">
-                    <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i>
                     <span>
-                        Mount the <strong>same Railway Volume</strong> to <code>/var/www/html/storage</code>
-                        on <em>both</em> the dashboard service and the cron service.
-                        Without a shared volume the two services have separate databases and will
-                        not see each other's configuration or history.
+                        The interval is configured per secret (in days, hours, or minutes). The cron process
+                        runs every minute &mdash; your interval controls whether a secret is due on that tick.
+                        Set it to <code>0</code> to make a secret manual-only; the cron job will skip it.
                     </span>
                 </div>
 
@@ -160,10 +141,8 @@
                     <li>Push or fork this repository to your GitHub account.</li>
                     <li>In Railway, create a new service from the repository (select <strong>Deploy from GitHub</strong>).</li>
                     <li>Set all the environment variables listed above in the service settings.</li>
-                    <li>Create a Railway <strong>Volume</strong> and mount it to <code>/var/www/html/storage</code> on this service.</li>
-                    <li>Create a second service from the same repository. Set the start command to <code>php /var/www/html/cron.php</code> and configure a cron schedule.</li>
-                    <li>Mount the <strong>same volume</strong> to <code>/var/www/html/storage</code> on the cron service.</li>
-                    <li>Deploy both services. Open the dashboard URL, log in with your <code>ADMIN_KEY</code>, and start adding rotation configurations.</li>
+                    <li>Create a Railway <strong>Volume</strong> and mount it to <code>/var/www/html/storage</code> so the SQLite databases persist across redeploys.</li>
+                    <li>Deploy the service. Open the dashboard URL, log in with your <code>ADMIN_KEY</code>, and start adding rotation configurations.</li>
                 </ol>
 
                 <div class="callout callout-info">

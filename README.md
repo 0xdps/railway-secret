@@ -41,7 +41,7 @@ The app writes two SQLite files under `storage/db/`:
 - `railway_cache.sqlite` — cached service/variable metadata (encrypted, no secret values)
 - `login_rate_limit.sqlite` — login throttle state
 
-Mount a Railway Volume to `/var/www/html/storage` so data persists across deploys. If you run a separate cron service, mount the **same volume** so both services share the same database.
+Mount a Railway Volume to `/var/www/html/storage` so data persists across deploys.
 
 ## Local development
 
@@ -62,14 +62,20 @@ Open `http://localhost:8080` in both cases.
 
 ## Deploying to Railway
 
+Deploy instantly from the Railway template marketplace:
+
+**https://railway.com/deploy/railway-secrets**
+
+Available in the **Automation** category — search for **Railway Secrets**.
+
+Or deploy manually from source:
+
 1. Push this repository to GitHub.
 2. Create a Railway service from the repo.
 3. Set all required environment variables in the service settings.
 4. Create a Railway Volume and mount it to `/var/www/html/storage`.
-5. Create a second service from the same repo for scheduled rotation:
-   - Start command: `php /var/www/html/cron.php`
-   - Set a cron schedule (e.g. `0 3 * * *` for daily at 03:00 UTC)
-   - Mount the **same volume** to `/var/www/html/storage`
+
+Scheduled rotation runs automatically inside the container — `crond` starts with the service and executes `cron.php` every minute. The script handles its own per-secret interval logic, so no separate cron service is needed.
 
 ## Health check
 
