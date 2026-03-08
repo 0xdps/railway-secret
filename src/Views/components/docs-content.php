@@ -1,14 +1,14 @@
 <?php
 /**
- * Docs Content Component
- * Renders the main documentation content area
+ * Docs Content Component — terminal-noir redesign
+ * Rewritten from scratch.
  */
 ?>
 <div id="mainContent" class="main-content" data-service-id="" data-section="docs" data-view-title="Docs" data-cache-fetched-at="0">
     <div class="page-header">
         <div class="page-header-left">
             <h1>Documentation</h1>
-            <p>How to configure, deploy, and operate Railway Secrets</p>
+            <p>Configuration, deployment, and operational reference for Railway Secrets.</p>
         </div>
     </div>
 
@@ -22,7 +22,7 @@
                 <a href="#env-vars">Environment variables</a>
                 <a href="#rotation">Rotation modes</a>
                 <a href="#deployment">Deployment</a>
-                <a href="#security">Security</a>
+                <a href="#security">Security model</a>
             </nav>
 
             <!-- Body -->
@@ -30,59 +30,67 @@
 
                 <h2 id="how-it-works">How it works</h2>
                 <p>
-                    Railway Secrets manages Railway environment secrets from a single dashboard.
-                    You configure each secret once — setting its length, encoding, and
-                    auto-rotate interval — and Railway Secrets handles both scheduled and
-                    on-demand rotation from that same configuration.
+                    Railway Secrets is a self-hosted dashboard that sits on top of the
+                    Railway GraphQL API. You define how each environment variable should
+                    be rotated &mdash; its byte length, encoding, and schedule &mdash; and Railway
+                    Secrets handles the rest: generating new values, pushing them to
+                    Railway, triggering service redeploys, and archiving the previous
+                    value in an encrypted SQLite database.
                 </p>
-                <ul>
-                    <li>The dashboard lets you <strong>rotate any secret immediately</strong> with one click.</li>
-                    <li>The cron job reads the same configuration and <strong>rotates automatically</strong> when the interval has elapsed.</li>
-                    <li>Each rotation saves the <em>previous</em> value in an AES-256-GCM encrypted SQLite database, so you can roll back if needed.</li>
+                <p style="margin-top: 10px;">
+                    There are two actors that drive rotation: the <strong>dashboard</strong>
+                    (you, on demand) and the <strong>cron service</strong> (automated,
+                    on schedule). Both share the same configuration and the same
+                    encrypted storage volume &mdash; no state is duplicated.
+                </p>
+                <ul style="margin-top: 10px;">
+                    <li><strong>Click Rotate</strong> on any managed secret to rotate instantly.</li>
+                    <li>The <strong>cron service</strong> runs <code>cron.php</code> and rotates every secret whose interval has elapsed since its last rotation.</li>
+                    <li>Every rotation writes the <em>previous</em> value &mdash; AES-256-GCM encrypted &mdash; to SQLite. You can inspect or copy it from Rotation History.</li>
+                    <li>Unmanaged secrets (no config yet) are listed but never rotated automatically.</li>
                 </ul>
 
                 <hr class="docs-divider">
 
                 <h2 id="env-vars">Environment variables</h2>
-                <p>Set these in your Railway service before deploying.</p>
+                <p>Set the following variables in your Railway service before deploying.</p>
 
-                <div class="panel" style="overflow:hidden;">
+                <div class="panel" style="overflow: hidden; margin-top: 14px;">
                     <table class="env-table">
                         <thead>
-                            <tr><th>Variable</th><th>Description</th></tr>
+                            <tr>
+                                <th>Variable</th>
+                                <th>Description</th>
+                            </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>RAILWAY_TOKEN</td>
-                                <td>Railway API token with project-level write access.</td>
+                                <td>Railway API token with project-level write access. Generate one from <strong>Account &rarr; Tokens</strong> in the Railway dashboard.</td>
                             </tr>
                             <tr>
                                 <td>RAILWAY_PROJECT_ID</td>
-                                <td>Auto-injected by Railway for the running service. Fallback <code>PROJECT_ID</code> is also supported by this app.</td>
+                                <td>Auto-injected by Railway for the running service. The fallback variable <code>PROJECT_ID</code> is also accepted.</td>
                             </tr>
                             <tr>
                                 <td>RAILWAY_ENVIRONMENT_ID</td>
-                                <td>Auto-injected by Railway for the running service. Fallback <code>ENVIRONMENT_ID</code> is also supported by this app.</td>
+                                <td>Auto-injected by Railway for the running service. The fallback variable <code>ENVIRONMENT_ID</code> is also accepted.</td>
                             </tr>
                             <tr>
                                 <td>ADMIN_KEY</td>
-                                <td>Password for dashboard login. Use a strong random string.</td>
+                                <td>Password for the dashboard login page. Use a strong random string &mdash; at least 32 characters.</td>
                             </tr>
                             <tr>
                                 <td>SESSION_SECRET</td>
-                                <td>Signs the browser session cookie. Rotate if compromised.</td>
+                                <td>Secret used to sign and encrypt the session cookie. Rotate this if you suspect it has been leaked.</td>
                             </tr>
                             <tr>
                                 <td>MASTER_KEY</td>
-                                <td>Encrypts the secret history at rest. <strong>Never lose this</strong> — history becomes unreadable without it.</td>
+                                <td>Master encryption key for the secret history database. <strong>Back this up.</strong> History entries are unreadable without it.</td>
                             </tr>
                             <tr>
                                 <td>TRUSTED_PROXY_IPS</td>
-                                <td>Optional comma-separated proxy IPs to trust for forwarded client IP headers.</td>
-                            </tr>
-                            <tr>
-                                <td>ROTATION_TIME_UNIT</td>
-                                <td>Time unit for rotation intervals: <code>day</code>, <code>hour</code>, or <code>minute</code>. Defaults to <code>day</code>. Use <code>minute</code> for testing.</td>
+                                <td>Optional. Comma-separated list of proxy IP addresses to trust for <code>X-Forwarded-For</code> headers. Leave empty if not behind a proxy.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -91,67 +99,133 @@
                 <hr class="docs-divider">
 
                 <h2 id="rotation">Rotation modes</h2>
-                <p>Every secret can be rotated in two ways — and both use the same config you set in the dashboard.</p>
-
-                <h3>On-demand (dashboard)</h3>
                 <p>
-                    Click <strong>Rotate</strong> on any managed secret. Railway Secrets will immediately:
+                    Every secret is configured independently. The configuration covers
+                    three things: value length, encoding format, and rotation schedule.
+                    Both rotation modes &mdash; manual and scheduled &mdash; use the exact same
+                    configuration.
                 </p>
-                <ul>
-                    <li>Generate a new secret with the configured length &amp; encoding.</li>
-                    <li>Push it to Railway via the API.</li>
-                    <li>Railway auto-redeploys any service that uses the variable.</li>
-                    <li>Store the previous value encrypted in SQLite.</li>
-                </ul>
+
+                <h3>Manual (dashboard)</h3>
+                <p>
+                    Click <strong>Rotate</strong> on any managed secret row. Railway Secrets will:
+                </p>
+                <ol>
+                    <li>Generate a cryptographically random value using the configured length and encoding.</li>
+                    <li>Push the new value to Railway via the GraphQL API.</li>
+                    <li>Railway automatically redeploys every service that references the variable.</li>
+                    <li>Save the previous value, AES-256-GCM encrypted, to the SQLite history table.</li>
+                </ol>
 
                 <h3>Scheduled (cron)</h3>
                 <p>
-                    The cron job runs <code>cron.php</code> on a schedule you define.
-                    It reads the same managed secrets from the database and rotates any
-                    secret whose <strong>interval has elapsed</strong> since its last rotation.
+                    The cron service executes <code>php cron.php</code> on your defined schedule.
+                    On each run it reads all managed secrets from the database and rotates
+                    any secret whose <strong>Rotation Interval</strong> has elapsed since the
+                    secret's last recorded rotation.
                 </p>
+
                 <div class="callout callout-info">
                     <i data-lucide="info" style="width:14px;height:14px;"></i>
-                    <span>Set <strong>Rotation Interval</strong> to <code>0</code> in the dashboard to make a secret manual-only. The cron job will skip it.</span>
+                    <span>Set <strong>Rotation Interval</strong> to <code>0</code> to make a secret manual-only. The cron job skips any secret with an interval of zero.</span>
                 </div>
 
-                <h3>Railway Cron Service setup</h3>
-                <p>Create a separate <strong>Cron Service</strong> in Railway pointing to the same repository:</p>
-                <pre><code># Command
-php /var/www/html/cron.php
+                <h3>Setting up a Railway Cron Service</h3>
+                <p>Create a separate <strong>Cron Service</strong> in Railway pointing at the same repository with the following start command:</p>
+                <pre><code>php /var/www/html/cron.php</code></pre>
+                <p>Choose a cron schedule that matches your rotation policy:</p>
+                <pre><code># Daily at 03:00 UTC
+0 3 * * *
 
-# Schedule examples
-0 3 * * *      # Daily at 3 AM
-0 3 * * 0      # Weekly on Sunday at 3 AM
-0 3 1 * *      # Monthly on the 1st at 3 AM</code></pre>
+# Weekly — every Sunday at 03:00 UTC
+0 3 * * 0
+
+# Monthly — 1st of the month at 03:00 UTC
+0 3 1 * *</code></pre>
 
                 <div class="callout callout-warn">
                     <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i>
-                    <span>Mount the same Railway Volume to <code>/var/www/html/storage</code> in <em>both</em> the dashboard service and the cron service so they share the same SQLite database.</span>
+                    <span>
+                        Mount the <strong>same Railway Volume</strong> to <code>/var/www/html/storage</code>
+                        on <em>both</em> the dashboard service and the cron service.
+                        Without a shared volume the two services have separate databases and will
+                        not see each other's configuration or history.
+                    </span>
                 </div>
 
                 <hr class="docs-divider">
 
                 <h2 id="deployment">Deployment</h2>
-                <ol style="padding-left:1.2em; font-size:13px; color:var(--text-secondary); line-height:1.8;">
-                    <li>Push this repository to GitHub.</li>
-                    <li>Create a new Railway service from the repo.</li>
-                    <li>Set all the environment variables listed above.</li>
-                    <li>Create a Railway Volume and mount it to <code>/var/www/html/storage</code>.</li>
-                    <li>Create a second <strong>Cron Service</strong> from the same repo, set the cron command and schedule.</li>
-                    <li>Mount the <strong>same volume</strong> to the cron service at the same path.</li>
-                    <li>Open the dashboard URL, log in, and start configuring secrets.</li>
+                <ol>
+                    <li>Push or fork this repository to your GitHub account.</li>
+                    <li>In Railway, create a new service from the repository (select <strong>Deploy from GitHub</strong>).</li>
+                    <li>Set all the environment variables listed above in the service settings.</li>
+                    <li>Create a Railway <strong>Volume</strong> and mount it to <code>/var/www/html/storage</code> on this service.</li>
+                    <li>Create a second service from the same repository. Set the start command to <code>php /var/www/html/cron.php</code> and configure a cron schedule.</li>
+                    <li>Mount the <strong>same volume</strong> to <code>/var/www/html/storage</code> on the cron service.</li>
+                    <li>Deploy both services. Open the dashboard URL, log in with your <code>ADMIN_KEY</code>, and start adding rotation configurations.</li>
                 </ol>
+
+                <div class="callout callout-info">
+                    <i data-lucide="lightbulb" style="width:14px;height:14px;"></i>
+                    <span>
+                        After the first login, click <strong>Sync Cache</strong> from the secrets page
+                        if Railway variables do not appear immediately. The cache warms automatically
+                        on login, but a manual sync forces a fresh fetch from the Railway API.
+                    </span>
+                </div>
 
                 <hr class="docs-divider">
 
                 <h2 id="security">Security model</h2>
-                <ul>
-                    <li><strong>No active secrets stored</strong> — Railway Secrets only saves the <em>previous</em> value after a rotation. The live secret only exists in Railway.</li>
-                    <li><strong>AES-256-GCM encryption</strong> — every entry in the history table is encrypted with your <code>MASTER_KEY</code> before being written to disk.</li>
-                    <li><strong>Signed sessions</strong> — the browser cookie is both encrypted and HMAC-signed using <code>SESSION_SECRET</code>.</li>
-                    <li><strong>CLI-only cron</strong> — <code>cron.php</code> refuses to run outside of the PHP CLI environment.</li>
-                </ul>
+
+                <h3>What is stored</h3>
+                <p>
+                    Railway Secrets does <strong>not</strong> store the live value of any secret.
+                    The only values written to disk are the <em>previous</em> values saved
+                    after each rotation &mdash; and only if the rotation succeeds. The current live
+                    value lives exclusively in Railway.
+                </p>
+
+                <h3>Encryption at rest</h3>
+                <p>
+                    Every history entry is encrypted on write using <strong>AES-256-GCM</strong>
+                    with a unique random nonce per entry. The encryption key is derived from
+                    your <code>MASTER_KEY</code> environment variable. The SQLite file on disk
+                    contains no plaintext secret values.
+                </p>
+                <p style="margin-top: 8px;">
+                    The service name and project cache (SQLite) is also encrypted at rest
+                    with the same master key. The cache holds metadata only &mdash; no values.
+                </p>
+
+                <h3>Session security</h3>
+                <p>
+                    The browser session cookie is both HMAC-signed and AES-encrypted using
+                    <code>SESSION_SECRET</code>. Tampered or expired cookies are rejected at
+                    every request. There is no "remember me" &mdash; sessions expire on browser close.
+                </p>
+
+                <h3>CSRF protection</h3>
+                <p>
+                    Every state-changing request (rotation, config update, group management)
+                    requires a valid CSRF token bound to the session. Tokens are verified on
+                    the server before any mutation is applied.
+                </p>
+
+                <h3>Cron isolation</h3>
+                <p>
+                    <code>cron.php</code> checks <code>PHP_SAPI</code> at startup and aborts
+                    immediately if it is not running under the CLI SAPI. The script cannot be
+                    triggered via HTTP &mdash; it must be executed from the command line.
+                </p>
+
+                <h3>API token scope</h3>
+                <p>
+                    The <code>RAILWAY_TOKEN</code> only needs write access to the specific
+                    project Railway Secrets is deployed into. Use the minimum required scope &mdash;
+                    do not use an account-level token.
+                </p>
 
             </div><!-- /docs-body -->
         </div><!-- /docs-layout -->

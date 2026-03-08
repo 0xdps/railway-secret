@@ -17,6 +17,7 @@ class StorageService
         }
 
         $this->db = new SQLite3($dbPath);
+        $this->db->busyTimeout(5000);
         $this->masterKey = $masterKey;
         $this->init();
     }
@@ -43,15 +44,23 @@ class StorageService
             $this->db->exec("ALTER TABLE secret_history ADD COLUMN trigger_type TEXT NOT NULL DEFAULT 'manual'");
         }
 
+        // Migrate secret_value to allow NULL (for first-ever rotations with no prior value)
+        $this->migrateSecretValueNullable();
+
         $this->db->exec("CREATE TABLE IF NOT EXISTS managed_secrets (
             secret_name TEXT NOT NULL,
             service_id TEXT,
             length INTEGER DEFAULT 32,
             encoding TEXT DEFAULT 'hex',
             interval_days INTEGER DEFAULT 30,
+            interval_unit TEXT NOT NULL DEFAULT 'day',
             last_rotated DATETIME,
             PRIMARY KEY (secret_name, service_id)
         )");
+
+        if (!$this->tableHasColumn('managed_secrets', 'interval_unit')) {
+            $this->db->exec("ALTER TABLE managed_secrets ADD COLUMN interval_unit TEXT NOT NULL DEFAULT 'day'");
+        }
 
         $this->db->exec("CREATE INDEX IF NOT EXISTS idx_secret_history_lookup ON secret_history(secret_name, service_id, rotated_at DESC)");
 
@@ -61,6 +70,50 @@ class StorageService
             group_name TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
+    }
+
+    /**
+     * Migrate secret_value to be nullable using SQLite user_version as a
+     * one-time migration flag. user_version is an integer stored in the DB
+     * header — safe against concurrent requests since SQLite serialises writes.
+     * Current version guard: 1 = secret_value nullable migration applied.
+     */
+    private function migrateSecretValueNullable(): void
+    {
+        $row = $this->db->querySingle("PRAGMA user_version");
+        if ((int)$row >= 1) {
+            return; // already migrated
+        }
+
+        // Check if migration is actually needed (column may already be nullable
+        // on a fresh install because CREATE TABLE above omits NOT NULL)
+        $result = $this->db->query("PRAGMA table_info('secret_history')");
+        $needsMigration = false;
+        while ($col = $result->fetchArray(SQLITE3_ASSOC)) {
+            if ($col['name'] === 'secret_value' && (int)$col['notnull'] === 1) {
+                $needsMigration = true;
+                break;
+            }
+        }
+
+        if ($needsMigration) {
+            $this->db->exec("BEGIN");
+            $this->db->exec("ALTER TABLE secret_history RENAME TO secret_history_old");
+            $this->db->exec("CREATE TABLE secret_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                secret_name TEXT NOT NULL,
+                service_id TEXT,
+                secret_value TEXT,
+                new_secret_value TEXT,
+                trigger_type TEXT NOT NULL DEFAULT 'manual',
+                rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+            $this->db->exec("INSERT INTO secret_history SELECT id, secret_name, service_id, secret_value, new_secret_value, trigger_type, rotated_at FROM secret_history_old");
+            $this->db->exec("DROP TABLE secret_history_old");
+            $this->db->exec("COMMIT");
+        }
+
+        $this->db->exec("PRAGMA user_version = 1");
     }
 
     private function tableHasColumn(string $table, string $column): bool
@@ -80,14 +133,15 @@ class StorageService
     {
         $stmt = $this->db->prepare("
             INSERT OR REPLACE INTO managed_secrets 
-            (secret_name, service_id, length, encoding, interval_days) 
-            VALUES (:name, :sid, :len, :enc, :int)
+            (secret_name, service_id, length, encoding, interval_days, interval_unit) 
+            VALUES (:name, :sid, :len, :enc, :int, :unit)
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':sid', $serviceId, SQLITE3_TEXT);
         $stmt->bindValue(':len', $config['length'] ?? 32, SQLITE3_INTEGER);
         $stmt->bindValue(':enc', $config['encoding'] ?? 'hex', SQLITE3_TEXT);
         $stmt->bindValue(':int', $config['interval_days'] ?? 0, SQLITE3_INTEGER);
+        $stmt->bindValue(':unit', $config['interval_unit'] ?? 'day', SQLITE3_TEXT);
         
         return (bool)$stmt->execute();
     }
@@ -140,24 +194,28 @@ class StorageService
         $upd->execute();
     }
 
-    public function addHistory(string $name, string $oldPlainValue, ?string $serviceId = null, string $triggerType = 'manual'): bool
+    public function addHistory(string $name, ?string $oldPlainValue, ?string $serviceId = null, string $triggerType = 'manual'): bool
     {
-        $encryptedOldValue = CryptoService::encrypt($oldPlainValue, $this->masterKey);
-        
+        $encryptedOldValue = $oldPlainValue !== null
+            ? CryptoService::encrypt($oldPlainValue, $this->masterKey)
+            : null;
+
         $stmt = $this->db->prepare("INSERT INTO secret_history (secret_name, service_id, secret_value, new_secret_value, trigger_type) VALUES (:name, :sid, :old_val, NULL, :trigger)");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
-        $stmt->bindValue(':old_val', $encryptedOldValue, SQLITE3_TEXT);
+        $stmt->bindValue(':old_val', $encryptedOldValue, $encryptedOldValue === null ? SQLITE3_NULL : SQLITE3_TEXT);
         $stmt->bindValue(':trigger', $triggerType, SQLITE3_TEXT);
         $result = $stmt->execute();
 
         // Enforce retention policy (keep last 3 per secret + scope)
-        $cleanup = $this->db->prepare("DELETE FROM secret_history WHERE id IN (
+        $cleanup = $this->db->prepare("DELETE FROM secret_history WHERE id NOT IN (
             SELECT id FROM secret_history
             WHERE secret_name = :name
               AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))
-            ORDER BY rotated_at DESC LIMIT -1 OFFSET 3
-        )");
+            ORDER BY rotated_at DESC, id DESC LIMIT 3
+        ) AND secret_name = :name
+          AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))
+        ");
         $cleanup->bindValue(':name', $name, SQLITE3_TEXT);
         $cleanup->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
         $cleanup->execute();
@@ -202,7 +260,11 @@ class StorageService
 
         $history = [];
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-            $row['secret_value'] = CryptoService::decrypt($row['secret_value'], $this->masterKey);
+            if (!empty($row['secret_value'])) {
+                $row['secret_value'] = CryptoService::decrypt($row['secret_value'], $this->masterKey);
+            } else {
+                $row['secret_value'] = null;
+            }
             $history[] = $row;
         }
         return $history;

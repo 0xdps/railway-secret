@@ -1,126 +1,96 @@
 # Railway Secrets
 
-Railway Secrets is a lightweight PHP dashboard to manage and rotate Railway environment variables for global and service scopes.
+A self-hosted PHP dashboard to manage and rotate Railway environment variables. Works across global scope and per-service scope.
 
-## Features
+## What it does
 
-- View global and per-service Railway variables
-- Manual rotation and scheduled rotation (via `cron.php`)
-- Configurable generation: length + encoding (`hex`, `base64`, `alphanumeric`)
-- Encrypted history storage with AES-256-GCM
-- Admin authentication with secure cookies
-- CSRF protection for state-changing actions
-- Login brute-force protection with separate SQLite rate-limit DB
+- Lists global and per-service Railway environment variables
+- Rotates secrets on demand from the dashboard or on a schedule via `cron.php`
+- Generates new values with configurable length and encoding (`hex`, `base64`, `alphanumeric`)
+- Stores the previous value after each rotation, encrypted with AES-256-GCM
+- Groups services into named sets for organised workflows
+- Protects the dashboard with session-based auth and CSRF tokens
+- Throttles login attempts with a separate SQLite rate-limit database
 
-## Tech Stack
+## Stack
 
 - PHP 8.2
 - SQLite
-- Nginx + PHP-FPM (Docker image)
+- Nginx + PHP-FPM (Docker)
 - Railway GraphQL API
 
-## Required Environment Variables
+## Environment variables
 
-Create `.env` from `.env.example` and set:
+| Variable | Required | Description |
+|---|---|---|
+| `RAILWAY_TOKEN` | yes | Railway API token with project write access |
+| `RAILWAY_PROJECT_ID` | yes | Project ID (auto-injected by Railway, or set manually) |
+| `RAILWAY_ENVIRONMENT_ID` | yes | Environment ID (auto-injected by Railway, or set manually) |
+| `ADMIN_KEY` | yes | Password for the dashboard login |
+| `SESSION_SECRET` | yes | Signs and encrypts the session cookie |
+| `MASTER_KEY` | yes | Encrypts the secret history database at rest |
+| `TRUSTED_PROXY_IPS` | no | Comma-separated proxy IPs to trust for `X-Forwarded-For` |
 
-- `RAILWAY_TOKEN`
-- `RAILWAY_PROJECT_ID` or `RAILWAY_RAILWAY_PROJECT_ID`
-- `RAILWAY_ENVIRONMENT_ID` or `RAILWAY_RAILWAY_ENVIRONMENT_ID`
-- `ADMIN_KEY`
-- `SESSION_SECRET`
-- `MASTER_KEY`
+> **Note:** When `RAILWAY_ENVIRONMENT_NAME` is set the session cookie uses `Secure` + `SameSite=Strict`. Without it the cookie uses `SameSite=Lax` (suitable for local development).
 
-Recommended:
+## Storage
 
-- `RAILWAY_ENVIRONMENT_NAME`
-  - if set: strict production cookie mode (`Secure`, `SameSite=Strict`)
-  - if not set: dev-friendly cookie mode (`SameSite=Lax`)
-- `TRUSTED_PROXY_IPS`
-  - comma-separated proxy IPs for trusted `X-Forwarded-For` handling
+The app writes two SQLite files under `storage/db/`:
 
-## Data Files
+- `secrets.sqlite` — rotation config and encrypted history
+- `railway_cache.sqlite` — cached service/variable metadata (encrypted, no secret values)
+- `login_rate_limit.sqlite` — login throttle state
 
-Under `storage/db/`:
+Mount a Railway Volume to `/var/www/html/storage` so data persists across deploys. If you run a separate cron service, mount the **same volume** so both services share the same database.
 
-- `secrets.sqlite` (managed secret config + encrypted history)
-- `login_rate_limit.sqlite` (login protection state)
+## Local development
 
-## Local Development
-
-### Option A: PHP built-in server
+**PHP built-in server**
 
 ```bash
 php -S localhost:8080 -t public
 ```
 
-Open: `http://localhost:8080`
-
-### Option B: Docker
+**Docker**
 
 ```bash
-docker build -t rail-rotator .
-docker run --rm -p 8080:80 --env-file .env rail-rotator
+docker build -t railway-secrets .
+docker run --rm -p 8080:80 --env-file .env railway-secrets
 ```
 
-Open: `http://localhost:8080`
+Open `http://localhost:8080` in both cases.
 
-## Railway Deployment
+## Deploying to Railway
 
 1. Push this repository to GitHub.
-2. Create a new Railway service from the repo.
-3. Configure all required environment variables.
-4. Add a Railway volume and mount it to `/var/www/html/storage`.
-5. (Optional but recommended) Create a separate Cron service from same repo:
-   - Command: `php /var/www/html/cron.php`
-   - Mount the same volume to `/var/www/html/storage`
+2. Create a Railway service from the repo.
+3. Set all required environment variables in the service settings.
+4. Create a Railway Volume and mount it to `/var/www/html/storage`.
+5. Create a second service from the same repo for scheduled rotation:
+   - Start command: `php /var/www/html/cron.php`
+   - Set a cron schedule (e.g. `0 3 * * *` for daily at 03:00 UTC)
+   - Mount the **same volume** to `/var/www/html/storage`
 
-### Health Check
+## Health check
 
-Use one of these paths for Railway health checks:
-
-- `GET /health`
-- `GET /healthz`
-
-Expected response:
+```
+GET /health
+GET /healthz
+```
 
 ```json
 {"ok":true,"status":"healthy","timestamp":"..."}
 ```
 
-## Railway Template Publish Guide
+## Security
 
-Use this checklist to publish as a Railway template.
-
-1. Ensure repository visibility is public.
-2. Confirm `.env.example` contains all required keys (without secrets).
-3. Confirm `README.md` has:
-   - one-line purpose
-   - required envs
-   - deployment steps
-4. In Railway dashboard:
-   - Create a project from this repo once
-   - Validate deploy works end-to-end
-5. From Railway template flow:
-   - Choose "Create Template"
-   - Select this source repo
-   - Add template metadata:
-   - Name: `Railway Secrets`
-     - Description: secret rotation dashboard for Railway variables
-     - Category: DevOps / Security
-   - Map required env vars with descriptions/defaults where safe
-   - Mark volume requirement for `/var/www/html/storage`
-6. Publish template and test with a fresh Railway account/workspace.
-7. Version updates:
-   - Keep template and repo in sync
-   - Re-validate env variable list after changes
-
-## Security Notes
-
-- Never commit `.env`.
-- Rotate secrets immediately if exposed.
-- Use long random values for `ADMIN_KEY`, `SESSION_SECRET`, and `MASTER_KEY`.
-- Set `TRUSTED_PROXY_IPS` in production.
+- Use strong random values (32+ characters) for `ADMIN_KEY`, `SESSION_SECRET`, and `MASTER_KEY`.
+- Set `TRUSTED_PROXY_IPS` in production environments behind a proxy.
+- Never commit `.env` or expose any of the keys above.
+- Rotate `SESSION_SECRET` if you suspect it has been leaked.
+- The `RAILWAY_TOKEN` should have the minimum scope needed — project-level write, not account-level.
 
 ## License
 
-MIT (see `LICENSE`).
+MIT — see `LICENSE`.
+

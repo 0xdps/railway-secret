@@ -7,9 +7,11 @@ use SQLite3;
 class RailwayCacheService
 {
     private SQLite3 $db;
+    private ?string $encryptionKey;
 
-    public function __construct(string $dbPath)
+    public function __construct(string $dbPath, ?string $encryptionKey = null)
     {
+        $this->encryptionKey = ($encryptionKey !== '' && $encryptionKey !== null) ? $encryptionKey : null;
         $dbDir = dirname($dbPath);
         if (!is_dir($dbDir) && !mkdir($dbDir, 0775, true) && !is_dir($dbDir)) {
             throw new \RuntimeException("Unable to create cache directory: {$dbDir}");
@@ -48,7 +50,18 @@ class RailwayCacheService
             return null;
         }
 
-        $decoded = json_decode((string)$row['payload_json'], true);
+        $raw = (string)$row['payload_json'];
+        if ($this->encryptionKey !== null) {
+            $decrypted = CryptoService::decrypt($raw, $this->encryptionKey);
+            if ($decrypted === null) {
+                // Stale entry written before encryption was enabled — purge and force re-fetch.
+                $this->delete($key);
+                return null;
+            }
+            $raw = $decrypted;
+        }
+
+        $decoded = json_decode($raw, true);
         return is_array($decoded) ? $decoded : null;
     }
 
@@ -75,6 +88,10 @@ class RailwayCacheService
         $payloadJson = json_encode($payload);
         if (!is_string($payloadJson)) {
             throw new \RuntimeException('Unable to encode cache payload');
+        }
+
+        if ($this->encryptionKey !== null) {
+            $payloadJson = CryptoService::encrypt($payloadJson, $this->encryptionKey);
         }
 
         $stmt = $this->db->prepare("INSERT INTO railway_cache (cache_key, payload_json, fetched_at, expires_at)

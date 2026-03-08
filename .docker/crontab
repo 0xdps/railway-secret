@@ -1,0 +1,6 @@
+# Run the secret rotation check every minute.
+# The PHP script handles its own interval logic — it only rotates when a
+# secret's configured interval has actually elapsed since its last rotation.
+# Output is sent to stdout/stderr so it is captured by the container runtime
+# (visible in Railway's log viewer).
+* * * * * /usr/local/bin/php /var/www/html/cron.php 2>&1 | tee -a /proc/1/fd/1

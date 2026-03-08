@@ -35,8 +35,11 @@ use App\Service\SessionManager;
 const LOGIN_WINDOW_SECONDS = 900;
 const LOGIN_MAX_ATTEMPTS = 6;
 const LOGIN_LOCK_SECONDS = 900;
-const CACHE_TTL_SERVICES_SECONDS = 300;
-const CACHE_TTL_VARIABLES_SECONDS = 120;
+// Only metadata (service names, variable names) is cached — no secret values.
+// Long TTL is safe; the cache-clear cron wipes everything every 5 minutes during
+// normal operation. The TTL acts as a safety net if the cron doesn't run.
+const CACHE_TTL_SERVICES_SECONDS  = 3600; // 1 hour
+const CACHE_TTL_VARIABLES_SECONDS = 3600; // 1 hour
 
 function getRequiredEnv(string $name): string
 {
@@ -87,6 +90,11 @@ function normalizeEncoding(?string $encoding): ?string
     return $encoding;
 }
 
+function normalizeUnit(?string $unit): string
+{
+    return in_array($unit, ['minute', 'hour', 'day'], true) ? $unit : 'day';
+}
+
 function cacheKeyServices(string $projectId): string
 {
     return 'services:' . $projectId;
@@ -130,8 +138,9 @@ function getVariablesCached(
     }
 
     $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
-    $cache->put($key, $variables, CACHE_TTL_VARIABLES_SECONDS);
-    return $variables;
+    // Store only names — values are never persisted to the cache DB.
+    $cache->put($key, array_keys($variables), CACHE_TTL_VARIABLES_SECONDS);
+    return array_keys($variables);
 }
 
 function invalidateVariableCache(RailwayCacheService $cache, string $projectId, string $environmentId, ?string $serviceId): void
@@ -204,7 +213,9 @@ function getClientIp(): string
 
     $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
     if (is_string($forwarded) && $forwarded !== '') {
-        $parts = explode(',', $forwarded);
+        // Use the rightmost entry — it is the one appended by the nearest trusted proxy
+        // (Railway's edge). Leftmost entries can be forged by the client.
+        $parts = array_reverse(explode(',', $forwarded));
         foreach ($parts as $part) {
             $candidate = trim($part);
             if (filter_var($candidate, FILTER_VALIDATE_IP)) {
@@ -395,7 +406,7 @@ try {
     $strictCookieMode = trim((string)(getenv('RAILWAY_ENVIRONMENT_NAME') ?: '')) !== '';
     $session = new SessionManager($sessionSecret, $adminKey, $strictCookieMode);
     $railway = new RailwayClient($railwayToken);
-    $cache = new RailwayCacheService($cacheDbPath);
+    $cache = new RailwayCacheService($cacheDbPath, $masterKey);
     $storage = new StorageService($dbPath, $masterKey);
     $rotator = new RotatorService($railway, $storage);
 } catch (\Throwable $e) {
@@ -430,6 +441,15 @@ if ($path === '/login' && $method === 'POST') {
     $key = $_POST['key'] ?? '';
     if ($session->login($key)) {
         clearFailedLogin($ip);
+        // Warm the cache eagerly so the dashboard loads instantly on first request.
+        // We cache only names — safe to do here before the redirect.
+        try {
+            getServicesCached($railway, $cache, $projectId, true);
+            getVariablesCached($railway, $cache, $projectId, $environmentId, null, true);
+        } catch (\Exception $e) {
+            // Non-fatal — dashboard will fetch on demand if Railway is unreachable.
+            error_log('Cache warm on login failed: ' . $e->getMessage());
+        }
         header('Location: /');
         exit;
     }
@@ -474,7 +494,7 @@ if (!is_string($csrfToken) || $csrfToken === '') {
 if ($path === '/api/manage' && $method === 'POST') {
     $action = $_POST['action'] ?? 'save';
     $name = $_POST['name'] ?? '';
-    $serviceId = $_POST['serviceId'] ?? null;
+    $serviceId = ($_POST['serviceId'] ?? '') ?: null;
     
     try {
         if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
@@ -491,10 +511,12 @@ if ($path === '/api/manage' && $method === 'POST') {
             $length = normalizeLength(isset($_POST['length']) ? (int)$_POST['length'] : null);
             $encoding = normalizeEncoding($_POST['encoding'] ?? null);
             $interval = max(0, (int)($_POST['interval'] ?? 0));
+            $intervalUnit = normalizeUnit($_POST['interval_unit'] ?? null);
             $storage->saveConfig($name, $serviceId, [
                 'length' => $length ?? 32,
                 'encoding' => $encoding ?? 'hex',
-                'interval_days' => $interval
+                'interval_days' => $interval,
+                'interval_unit' => $intervalUnit,
             ]);
         }
         sendApiJson(200, ['success' => true]);
@@ -548,9 +570,36 @@ if ($path === '/api/rotate' && $method === 'POST') {
 }
 
 // HTMX API Endpoints
+
+// On-demand secret value — never embedded in HTML; fetched only on explicit user action.
+if ($path === '/api/secret-value' && $method === 'GET') {
+    $secretName = $_GET['name'] ?? '';
+    $serviceId  = ($_GET['serviceId'] ?? '') ?: null;
+
+    if (!isValidSecretName($secretName)) {
+        sendApiJson(400, ['success' => false, 'error' => 'Invalid secret name']);
+        exit;
+    }
+
+    try {
+        // Fetch directly from Railway — values are never cached on disk.
+        $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+        if (!array_key_exists($secretName, $variables)) {
+            sendApiJson(404, ['success' => false, 'error' => 'Secret not found']);
+            exit;
+        }
+        // Return only the requested value — nothing else.
+        sendApiJson(200, ['success' => true, 'value' => $variables[$secretName]]);
+    } catch (\Exception $e) {
+        error_log('Secret value API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 if ($path === '/api/config-form' && $method === 'GET') {
     $secretName = $_GET['name'] ?? '';
-    $serviceId = $_GET['serviceId'] ?? null;
+    $serviceId = ($_GET['serviceId'] ?? '') ?: null;
     
     if (!isValidSecretName($secretName)) {
         http_response_code(400);
@@ -572,9 +621,33 @@ if ($path === '/api/config-form' && $method === 'GET') {
     exit;
 }
 
+if ($path === '/api/rotate-form' && $method === 'GET') {
+    $secretName = $_GET['name'] ?? '';
+    $serviceId  = ($_GET['serviceId'] ?? '') ?: null;
+
+    if (!isValidSecretName($secretName)) {
+        http_response_code(400);
+        echo 'Invalid secret name';
+        exit;
+    }
+
+    try {
+        $managed = $storage->getManagedSecrets();
+        $keyId   = ($serviceId ?: 'global') . ':' . $secretName;
+        $config  = $managed[$keyId] ?? null;
+
+        include __DIR__ . '/../src/Views/components/rotate-modal-form.php';
+    } catch (\Exception $e) {
+        error_log('Rotate form error: ' . $e->getMessage());
+        http_response_code(500);
+        echo 'Internal server error';
+    }
+    exit;
+}
+
 if ($path === '/api/config' && $method === 'POST') {
     $name = $_POST['name'] ?? '';
-    $serviceId = $_POST['serviceId'] ?? null;
+    $serviceId = ($_POST['serviceId'] ?? '') ?: null;
     $mode = $_POST['mode'] ?? 'save_and_rotate';
     
     try {
@@ -597,12 +670,14 @@ if ($path === '/api/config' && $method === 'POST') {
         $length = normalizeLength(isset($_POST['length']) ? (int)$_POST['length'] : null);
         $encoding = normalizeEncoding($_POST['encoding'] ?? null);
         $interval = max(0, (int)($_POST['interval'] ?? 0));
+        $intervalUnit = normalizeUnit($_POST['interval_unit'] ?? null);
 
         if ($mode === 'save_only' || $mode === 'save_and_rotate') {
             $storage->saveConfig($name, $serviceId, [
                 'length' => $length ?? 32,
                 'encoding' => $encoding ?? 'hex',
-                'interval_days' => $interval
+                'interval_days' => $interval,
+                'interval_unit' => $intervalUnit,
             ]);
         }
 
@@ -653,7 +728,8 @@ if ($path === '/api/config' && $method === 'POST') {
 if ($path === '/api/config' && $method === 'DELETE') {
     parse_str(file_get_contents('php://input'), $data);
     $name = $_GET['name'] ?? $data['name'] ?? '';
-    $serviceId = $_GET['serviceId'] ?? $data['serviceId'] ?? null;
+    $rawServiceId = $_GET['serviceId'] ?? $data['serviceId'] ?? '';
+    $serviceId = ($rawServiceId !== '' && $rawServiceId !== null) ? $rawServiceId : null;
     $csrf = $_GET['csrf_token'] ?? $data['csrf_token'] ?? null;
     
     try {
@@ -747,10 +823,11 @@ if ($path === '/api/rotation-history-detail' && $method === 'GET') {
             $serviceLabel = $serviceNameMap[$serviceId] ?? $serviceId;
         }
 
-        // If new_value is null (latest rotation row), fetch the live current value from Railway
+        // Only fetch the live Railway value when explicitly requested (opt-in) to
+        // avoid sending secrets over the wire on every Inspect open.
         $newValue = $detail['new_value'];
         $newValueIsLive = false;
-        if ($newValue === null) {
+        if ($newValue === null && ($_GET['fetch_live'] ?? '') === '1') {
             try {
                 $currentVars = $railway->getVariables($projectId, $environmentId, $serviceId !== '' ? $serviceId : null);
                 $secretName = (string)$detail['secret_name'];
@@ -891,7 +968,6 @@ if ($path === '/api/service-group/bulk' && $method === 'POST') {
 if ($path === '/docs') {
     $services = [];
     $groupedServices = [];
-    $timeConfig = getRotationTimeConfig();
     try {
         $services = getServicesCached($railway, $cache, $projectId, false);
         $storage->syncServiceNames($services);
@@ -914,7 +990,6 @@ if ($path === '/' || $path === '') {
     $viewTitle = $section === 'overview' ? 'Dashboard Overview' : 'Global Variables';
     $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
     $forceRefresh = ($_GET['refresh'] ?? '0') === '1';
-    $timeConfig = getRotationTimeConfig();
     
     try {
         $services = getServicesCached($railway, $cache, $projectId, $forceRefresh);
@@ -961,7 +1036,6 @@ if ($path === '/' || $path === '') {
         $recentHistory = [];
         $serviceCount = $storage->getServiceCount();
         $rotations24h = 0;
-        $timeConfig = getRotationTimeConfig();
         if ($isHtmx) {
             include __DIR__ . '/../src/Views/components/dashboard-main.php';
         } else {

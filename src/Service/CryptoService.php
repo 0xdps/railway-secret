@@ -16,11 +16,7 @@ class CryptoService
         }
 
         $ivlen = openssl_cipher_iv_length(self::CIPHER);
-        $strong = false;
-        $iv = openssl_random_pseudo_bytes($ivlen, $strong);
-        if ($iv === false || $strong !== true) {
-            throw new \RuntimeException('Unable to generate a secure IV');
-        }
+        $iv = random_bytes($ivlen);
 
         $tag = '';
         $ciphertext = openssl_encrypt($data, self::CIPHER, $key, $options = 0, $iv, $tag);

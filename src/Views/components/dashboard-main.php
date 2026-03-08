@@ -14,9 +14,11 @@
             <h1><?= htmlspecialchars($viewTitle) ?></h1>
             <p>
                 <?php if ($currentSection === 'overview'): ?>
-                    Quick status, helpful tips, and recent rotation activity.
+                    System status, recent activity, and quick tips.
+                <?php elseif ($currentSection === 'history'): ?>
+                    Full audit trail of every rotation.
                 <?php else: ?>
-                    Manage and rotate Railway environment secrets
+                    Manage and rotate environment secrets.
                 <?php endif; ?>
             </p>
         </div>
@@ -64,7 +66,7 @@
             <div class="panel overview-card">
                 <div class="overview-card-label">Managed Secrets</div>
                 <div class="overview-card-value"><?= (int)$managedCount ?></div>
-                <div class="overview-card-sub">Secrets with saved rotation config</div>
+                <div class="overview-card-sub">Secrets with a saved rotation config</div>
             </div>
             <div class="panel overview-card">
                 <div class="overview-card-label">Services</div>
@@ -74,25 +76,25 @@
             <div class="panel overview-card">
                 <div class="overview-card-label">Rotations (24h)</div>
                 <div class="overview-card-value"><?= (int)$rotations24h ?></div>
-                <div class="overview-card-sub">Recent updates in the last day</div>
+                <div class="overview-card-sub">Rotations in the last 24 h</div>
             </div>
         </div>
 
         <div class="overview-columns">
             <div class="panel overview-tips-panel">
-                <h3 class="overview-panel-title">Quick Tips</h3>
+                <h3 class="overview-panel-title">Quick Reference</h3>
                 <ul class="overview-list">
-                    <li>Use <strong>Create Group</strong> to organize services before editing secrets.</li>
-                    <li>Keep <strong>Rotation Interval</strong> to <code>0</code> for manual-only keys.</li>
-                    <li>Use <strong>Sync Cache</strong> when Railway changes are not visible yet.</li>
-                    <li>Open <strong>Rotation History</strong> to validate scheduled rotations.</li>
+                    <li>Use <strong>Create Group</strong> to organise services into named sets.</li>
+                    <li>Set <strong>Rotation Interval</strong> to <code>0</code> to disable auto-rotation.</li>
+                    <li>Hit <strong>Sync Cache</strong> if Railway changes are not visible yet.</li>
+                    <li>Open <strong>Rotation History</strong> to audit and inspect past values.</li>
                 </ul>
             </div>
             <div class="panel overview-activity-panel">
-                <div class="history-header" style="margin-bottom:8px;">
+                <div class="history-header">
                     <div>
-                        <h3 class="overview-panel-title">Overall Activity</h3>
-                        <p>Latest 5 rotations across all scopes.</p>
+                        <h3 class="overview-panel-title">Recent Activity</h3>
+                        <p>Last 5 rotations across all scopes.</p>
                     </div>
                     <a class="btn btn-ghost btn-sm" href="/?section=history" hx-get="/?section=history" hx-target="#mainContent" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#mainContentLoading">
                         <i data-lucide="history" style="width:13px;height:13px;"></i>
@@ -125,15 +127,13 @@
             <table class="data-table">
                 <colgroup>
                     <col style="width: 52%;">
-                    <col style="width: 19%;">
-                    <col style="width: 21%;">
-                    <col style="width: 8%;">
+                    <col style="width: 36%;">
+                    <col style="width: 12%;">
                 </colgroup>
                 <thead>
                     <tr>
                         <th>Secret</th>
-                        <th>Config</th>
-                        <th>Schedule</th>
+                        <th>Rotation</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -147,7 +147,7 @@
             <div class="history-header">
                 <div>
                     <h3>Rotation History</h3>
-                    <p>All recorded secret rotations. Click <strong>Inspect</strong> to view old &amp; new values.</p>
+                    <p>Complete audit trail. Click <strong>Inspect</strong> to view old &amp; new values.</p>
                 </div>
                 <button class="btn btn-ghost btn-sm"
                         type="button"

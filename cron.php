@@ -24,9 +24,6 @@ if (php_sapi_name() !== 'cli') {
 try {
     $masterKey = getRequiredEnv('MASTER_KEY');
     $railwayToken = getRequiredEnv('RAILWAY_TOKEN');
-    
-    // Get rotation time configuration
-    $timeConfig = getRotationTimeConfig();
 
     // Injected automatically by Railway
     $projectId = getenv('RAILWAY_PROJECT_ID') ?: getenv('PROJECT_ID');
@@ -60,8 +57,9 @@ echo "Starting scheduled rotations (" . date('Y-m-d H:i:s') . ")...\n";
 echo str_repeat('-', 60) . "\n";
 
 foreach ($managed as $key => $config) {
-    $interval = (int)($config['interval_days'] ?? 0);
-    $secret   = $config['secret_name'];
+    $interval  = (int)($config['interval_days'] ?? 0);
+    $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
+    $secret    = $config['secret_name'];
     $serviceId = $config['service_id'] ?: null;
     $scopeLabel = $serviceId ? "service:{$serviceId}" : 'global';
 

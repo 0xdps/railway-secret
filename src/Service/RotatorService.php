@@ -34,15 +34,16 @@ class RotatorService
         // 4. Update Railway
         $success = $this->railway->upsertVariable($projectId, $environmentId, $keyName, $newValue, $serviceId);
 
-        if ($success && $oldValue !== null) {
+        if ($success) {
             // 5. Back-fill the new_secret_value of the PREVIOUS history row now that
             //    we know what value was set during that rotation (= current value = oldValue).
-            $this->storage->updateLatestHistoryNewValue($keyName, $serviceId, $oldValue);
+            if ($oldValue !== null) {
+                $this->storage->updateLatestHistoryNewValue($keyName, $serviceId, $oldValue);
+            }
 
-            // 6. Record this rotation: store only the old value; new value will be
-            //    back-filled the next time this secret is rotated.
+            // 6. Record this rotation: store the old value (may be null for first-ever
+            //    rotation); new value will be back-filled on the next rotation.
             $this->storage->addHistory($keyName, $oldValue, $serviceId, $triggerType);
-            return true;
         }
 
         return $success;

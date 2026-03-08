@@ -149,22 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openHistoryModal(secret, service, rotatedAt, oldValue, newValue, newValueIsLive, triggerType) {
-        if (!historyModal) {
-            return;
-        }
+    function openHistoryModal(secret, service, rotatedAt, oldValue, newValue, newValueIsLive, triggerType, historyId) {
+        if (!historyModal) return;
 
-        const secretEl = document.getElementById('historyDetailSecret');
+        const secretEl  = document.getElementById('historyDetailSecret');
         const serviceEl = document.getElementById('historyDetailService');
         const triggerEl = document.getElementById('historyDetailTrigger');
-        const timeEl = document.getElementById('historyDetailTime');
-        const oldValueEl = document.getElementById('historyDetailOldValue');
-        const newValueEl = document.getElementById('historyDetailNewValue');
-        const newValueHint = document.getElementById('historyDetailNewValueHint');
+        const timeEl    = document.getElementById('historyDetailTime');
+        const oldValueEl    = document.getElementById('historyDetailOldValue');
+        const newValueEl    = document.getElementById('historyDetailNewValue');
+        const newValueHint  = document.getElementById('historyDetailNewValueHint');
+        const showCurrentBtn = document.getElementById('historyShowCurrentBtn');
 
-        if (secretEl) secretEl.textContent = secret || '--';
+        if (secretEl)  secretEl.textContent  = secret  || '--';
         if (serviceEl) serviceEl.textContent = service || '--';
-        if (timeEl) timeEl.textContent = rotatedAt || '--';
+        if (timeEl)    timeEl.textContent    = rotatedAt || '--';
 
         if (triggerEl) {
             const isAuto = triggerType === 'auto';
@@ -185,29 +184,82 @@ document.addEventListener('DOMContentLoaded', () => {
             if (newValue) {
                 newValueEl.textContent = newValue;
                 newValueEl.classList.remove('unavailable');
+                if (showCurrentBtn) showCurrentBtn.style.display = 'none';
             } else {
-                newValueEl.textContent = 'Not yet available — rotate again to backfill';
+                newValueEl.textContent = 'Not yet available';
                 newValueEl.classList.add('unavailable');
+                // Show opt-in button to fetch live value from Railway
+                if (showCurrentBtn) {
+                    showCurrentBtn.style.display = '';
+                    showCurrentBtn.dataset.historyId = historyId || '';
+                }
             }
         }
 
         if (newValueHint) {
-            if (newValueIsLive) {
-                newValueHint.textContent = 'live from Railway';
-                newValueHint.className = 'history-values-hint live-badge';
-            } else {
-                newValueHint.textContent = '(after rotation)';
-                newValueHint.className = 'history-values-hint';
-            }
+            newValueHint.textContent = newValue ? '(after rotation)' : '';
+            newValueHint.className = 'history-values-hint';
         }
 
         historyModal.classList.add('open');
     }
 
-    function closeHistoryModal() {
-        if (historyModal) {
-            historyModal.classList.remove('open');
+    // Opt-in: fetch the live current value from Railway only when the user asks
+    document.body.addEventListener('click', async (event) => {
+        const btn = event.target.closest('#historyShowCurrentBtn');
+        if (!btn) return;
+        const historyId = btn.dataset.historyId || '';
+        if (!historyId) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Fetching…';
+        try {
+            const response = await fetch(`/api/rotation-history-detail?id=${encodeURIComponent(historyId)}&fetch_live=1`);
+            const payload = await response.json();
+            if (!response.ok || !payload.success || !payload.data) {
+                showToast(payload.error || 'Unable to fetch live value', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Show current value';
+                return;
+            }
+            const liveValue = payload.data.new_value;
+            const newValueEl = document.getElementById('historyDetailNewValue');
+            const newValueHint = document.getElementById('historyDetailNewValueHint');
+            if (newValueEl) {
+                if (liveValue) {
+                    newValueEl.textContent = liveValue;
+                    newValueEl.classList.remove('unavailable');
+                    if (newValueHint) {
+                        newValueHint.textContent = 'live from Railway';
+                        newValueHint.className = 'history-values-hint live-badge';
+                    }
+                    btn.style.display = 'none';
+                } else {
+                    showToast('Value not found in Railway', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Show current value';
+                }
+            }
+        } catch {
+            showToast('Unable to fetch live value', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Show current value';
         }
+    });
+
+    function closeHistoryModal() {
+        if (!historyModal) return;
+        historyModal.classList.remove('open');
+        // Clear sensitive values from DOM as soon as the modal closes
+        const clearIds = ['historyDetailOldValue', 'historyDetailNewValue'];
+        clearIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '--';
+        });
+        const hint = document.getElementById('historyDetailNewValueHint');
+        if (hint) { hint.textContent = ''; hint.className = 'history-values-hint'; }
+        const showBtn = document.getElementById('historyShowCurrentBtn');
+        if (showBtn) showBtn.style.display = '';
     }
 
     function closeGroupModal() {
@@ -303,14 +355,45 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSidebarActive();
         updateDocumentTitle();
         updateCacheStatus();
+        initConfigModal();       // re-wire modal controls after HTMX swap
     });
     document.body.addEventListener('htmx:afterSettle', () => {
         refreshIcons();
         applyRelativeTimes();
     });
 
+    // ── Secret reveal helpers ────────────────────────────────────────────────
+    const autoHideTimers = new WeakMap();
+    const AUTO_HIDE_MS = 30_000;
+
+    function obscureSpan(span, toggleBtn) {
+        span.textContent = '••••••••••••';
+        span.classList.remove('revealed');
+        span.removeAttribute('data-loaded');
+        const icon = toggleBtn && toggleBtn.querySelector('[data-lucide]');
+        if (icon) { icon.setAttribute('data-lucide', 'eye'); refreshIcons(); }
+        const timer = autoHideTimers.get(span);
+        if (timer) { clearTimeout(timer); autoHideTimers.delete(span); }
+    }
+
+    function scheduleAutoHide(span, toggleBtn) {
+        const existing = autoHideTimers.get(span);
+        if (existing) clearTimeout(existing);
+        autoHideTimers.set(span, setTimeout(() => obscureSpan(span, toggleBtn), AUTO_HIDE_MS));
+    }
+
+    async function fetchSecretValue(secretName, serviceId) {
+        const params = new URLSearchParams({ name: secretName, serviceId: serviceId || '' });
+        const response = await fetch(`/api/secret-value?${params}`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) {
+            throw new Error(payload.error || 'Failed to fetch value');
+        }
+        return payload.value;
+    }
+
     // Open/close modal controls without inline handlers.
-    document.body.addEventListener('click', (event) => {
+    document.body.addEventListener('click', async (event) => {
         const openBtn = event.target.closest('.js-open-config-modal');
         if (openBtn) {
             openConfigModal();
@@ -338,23 +421,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = event.target.closest('.js-toggle-secret');
         if (toggleBtn) {
             const row = toggleBtn.closest('.secret-row');
-            if (!row) {
-                return;
-            }
-
+            if (!row) return;
             const span = row.querySelector('.secret-value');
-            if (!span) {
+            if (!span) return;
+
+            const isRevealed = span.dataset.loaded === '1';
+            if (isRevealed) {
+                obscureSpan(span, toggleBtn);
                 return;
             }
 
-            const isHidden = span.textContent.trim() === '••••••••••••';
-            span.textContent = isHidden ? span.dataset.value : '••••••••••••';
-            span.classList.toggle('revealed', isHidden);
-
+            // Not yet loaded — fetch from server
+            const secretName = toggleBtn.dataset.secretName || '';
+            const serviceId  = toggleBtn.dataset.serviceId  || '';
             const icon = toggleBtn.querySelector('[data-lucide]');
-            if (icon) {
-                icon.setAttribute('data-lucide', isHidden ? 'eye-off' : 'eye');
-                refreshIcons();
+            if (icon) { icon.setAttribute('data-lucide', 'loader-circle'); refreshIcons(); }
+            toggleBtn.disabled = true;
+
+            try {
+                const value = await fetchSecretValue(secretName, serviceId);
+                span.textContent = value;
+                span.dataset.loaded = '1';
+                span.classList.add('revealed');
+                if (icon) { icon.setAttribute('data-lucide', 'eye-off'); refreshIcons(); }
+                scheduleAutoHide(span, toggleBtn);
+            } catch (err) {
+                showToast('Could not fetch value', 'error');
+                if (icon) { icon.setAttribute('data-lucide', 'eye'); refreshIcons(); }
+            } finally {
+                toggleBtn.disabled = false;
             }
             return;
         }
@@ -401,31 +496,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.body.addEventListener('click', async (event) => {
         const copyBtn = event.target.closest('.js-copy-secret');
-        if (!copyBtn) {
-            return;
-        }
+        if (!copyBtn) return;
 
-        const value = copyBtn.dataset.secretValue || '';
+        const secretName = copyBtn.dataset.secretName || '';
+        const serviceId  = copyBtn.dataset.serviceId  || '';
+        const row = copyBtn.closest('.secret-row');
+        const span = row ? row.querySelector('.secret-value') : null;
+
         try {
-            await navigator.clipboard.writeText(value);
-            copyBtn.classList.add('success');
-
-            const icon = copyBtn.querySelector('[data-lucide]');
-            if (icon) {
-                icon.setAttribute('data-lucide', 'check');
-                refreshIcons();
+            let value;
+            if (span && span.dataset.loaded === '1') {
+                // Already revealed — use in-memory textContent, avoid extra round-trip
+                value = span.textContent;
+            } else {
+                value = await fetchSecretValue(secretName, serviceId);
+                // If the span exists, populate it and start auto-hide so the user
+                // can also see it without needing to click the eye separately.
+                if (span) {
+                    const toggleBtn = row.querySelector('.js-toggle-secret');
+                    span.textContent = value;
+                    span.dataset.loaded = '1';
+                    span.classList.add('revealed');
+                    const icon = toggleBtn && toggleBtn.querySelector('[data-lucide]');
+                    if (icon) { icon.setAttribute('data-lucide', 'eye-off'); refreshIcons(); }
+                    scheduleAutoHide(span, toggleBtn);
+                }
             }
 
+            await navigator.clipboard.writeText(value);
+            copyBtn.classList.add('success');
+            const icon = copyBtn.querySelector('[data-lucide]');
+            if (icon) { icon.setAttribute('data-lucide', 'check'); refreshIcons(); }
             setTimeout(() => {
                 copyBtn.classList.remove('success');
                 const resetIcon = copyBtn.querySelector('[data-lucide]');
-                if (resetIcon) {
-                    resetIcon.setAttribute('data-lucide', 'copy');
-                    refreshIcons();
-                }
+                if (resetIcon) { resetIcon.setAttribute('data-lucide', 'copy'); refreshIcons(); }
             }, 2000);
-        } catch (error) {
-            alert('Unable to copy value.');
+        } catch {
+            showToast('Unable to copy value', 'error');
         }
     });
 
@@ -455,9 +563,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.service || '',
                 data.rotated_at || '',
                 data.old_value || '',
-                data.new_value || '',
+                data.new_value || null,
                 !!data.new_value_is_live,
-                data.trigger_type || 'manual'
+                data.trigger_type || 'manual',
+                data.id
             );
         } catch (error) {
             showToast('Unable to load history values', 'error');
@@ -718,4 +827,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ── Config modal: schedule toggle ─────────────────────────────────────────
+    function initConfigModal() {
+        const toggle   = document.getElementById('scheduleToggle');
+        const fields   = document.getElementById('scheduleFields');
+        const fallback = document.getElementById('intervalFallback');
+
+        if (toggle && fields && fallback) {
+            function applyScheduleToggle() {
+                const on = toggle.checked;
+                fields.style.display = on ? '' : 'none';
+                fallback.disabled    = on;
+            }
+            applyScheduleToggle();
+            toggle.addEventListener('change', applyScheduleToggle);
+        }
+    }
+
+    initConfigModal();
 });

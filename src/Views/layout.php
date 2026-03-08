@@ -8,7 +8,6 @@
  * @var string|null $serviceId - Current service ID
  * @var string $section - Current section (secrets/history/etc)
  * @var array $groupedServices - Services organized by group
- * @var array $timeConfig - Rotation time configuration
  * @var string $pageScript - Script file to load (e.g., dashboard.js, docs.js)
  * @var string $extraHead - Additional head content (optional)
  * @var callable $contentCallback - Function that renders main content
@@ -106,6 +105,12 @@
                 </button>
             </div>
             <pre class="history-values-pre" id="historyDetailNewValue">--</pre>
+            <button type="button" id="historyShowCurrentBtn"
+                    class="btn btn-ghost btn-sm"
+                    style="display:none;margin-top:6px;font-size:11px;">
+                <i data-lucide="radio-tower" style="width:11px;height:11px;"></i>
+                Show current value
+            </button>
         </div>
         <div class="modal-actions" style="margin-top:16px;">
             <button type="button" class="btn btn-primary btn-md js-close-history-modal">Close</button>

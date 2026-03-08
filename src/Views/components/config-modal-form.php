@@ -1,99 +1,121 @@
 <?php
 /**
  * Configuration modal form content
- * 
+ *
  * Required variables:
- * @var string $secretName - Secret name being configured
- * @var array|null $config - Existing configuration or null
- * @var string $serviceId - Current service ID
- * @var string $csrfToken - CSRF token
+ * @var string     $secretName
+ * @var array|null $config
+ * @var string     $serviceId
+ * @var string     $csrfToken
  */
+
+$hasConfig      = !empty($config);
+$scheduleOn     = $hasConfig && (int)($config['interval_days'] ?? 0) > 0;
+$savedInterval  = $hasConfig ? (int)($config['interval_days'] ?? 1) : 1;
+$savedUnit      = $config['interval_unit'] ?? 'day';
+$savedLength    = (int)($config['length'] ?? 32);
+$savedEncoding  = $config['encoding'] ?? 'hex';
 ?>
 <div class="modal-header">
-    <span class="modal-title">Rotate & Configure: <?= htmlspecialchars($secretName) ?></span>
+    <span class="modal-title">
+        <i data-lucide="settings-2" style="width:13px;height:13px;margin-right:5px;vertical-align:-1px;"></i>
+        Configure: <?= htmlspecialchars($secretName) ?>
+    </span>
     <button class="modal-close js-close-config-modal" type="button">
         <i data-lucide="x" style="width:14px;height:14px;"></i>
     </button>
 </div>
 
-<form hx-post="/api/config" 
-      hx-target="#secrets-table-body" 
-    hx-swap="innerHTML"
-    hx-indicator="#configSavingIndicator">
-    
-    <input type="hidden" name="name" value="<?= htmlspecialchars($secretName) ?>">
-    <input type="hidden" name="serviceId" value="<?= htmlspecialchars($serviceId) ?>">
+<form hx-post="/api/config"
+      hx-target="#secrets-table-body"
+      hx-swap="innerHTML"
+      hx-indicator="#configSavingIndicator">
+
+    <input type="hidden" name="name"       value="<?= htmlspecialchars($secretName) ?>">
+    <input type="hidden" name="serviceId"  value="<?= htmlspecialchars((string)$serviceId) ?>">
     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
 
-    <div class="form-row">
+    <!-- ── Section 1: Generation ──────────────────────────────── -->
+    <div class="config-section-label">Generation</div>
+    <div class="config-section-hint">How new values are generated when this secret rotates.</div>
+
+    <div class="form-row" style="margin-top:12px;">
         <div class="form-group">
             <label class="form-label">Length</label>
             <select name="length" class="form-control">
-                <option value="16" <?= ($config['length'] ?? 32) == 16 ? 'selected' : '' ?>>16 chars</option>
-                <option value="32" <?= ($config['length'] ?? 32) == 32 ? 'selected' : '' ?>>32 chars</option>
-                <option value="64" <?= ($config['length'] ?? 32) == 64 ? 'selected' : '' ?>>64 chars</option>
-                <option value="128" <?= ($config['length'] ?? 32) == 128 ? 'selected' : '' ?>>128 chars</option>
+                <option value="16"  <?= $savedLength === 16  ? 'selected' : '' ?>>16 chars</option>
+                <option value="32"  <?= $savedLength === 32  ? 'selected' : '' ?>>32 chars</option>
+                <option value="64"  <?= $savedLength === 64  ? 'selected' : '' ?>>64 chars</option>
+                <option value="128" <?= $savedLength === 128 ? 'selected' : '' ?>>128 chars</option>
             </select>
         </div>
         <div class="form-group">
-            <label class="form-label">Encoding</label>
+            <label class="form-label">Format</label>
             <select name="encoding" class="form-control">
-                <option value="hex" <?= ($config['encoding'] ?? 'hex') === 'hex' ? 'selected' : '' ?>>Hexadecimal</option>
-                <option value="base64" <?= ($config['encoding'] ?? 'hex') === 'base64' ? 'selected' : '' ?>>Base64</option>
-                <option value="alphanumeric" <?= ($config['encoding'] ?? 'hex') === 'alphanumeric' ? 'selected' : '' ?>>Alphanumeric</option>
+                <option value="hex"          <?= $savedEncoding === 'hex'          ? 'selected' : '' ?>>Hex</option>
+                <option value="base64"       <?= $savedEncoding === 'base64'       ? 'selected' : '' ?>>Base64</option>
+                <option value="alphanumeric" <?= $savedEncoding === 'alphanumeric' ? 'selected' : '' ?>>Alphanumeric</option>
             </select>
         </div>
     </div>
 
-    <div class="form-group">
-        <label class="form-label">Auto-rotate interval</label>
-        <div class="input-with-suffix">
-            <input type="number" name="interval" placeholder="0 = manual only" min="0" value="<?= (int)($config['interval_days'] ?? 30) ?>">
-            <span class="suffix"><?= htmlspecialchars($timeConfig['label'] ?? 'days') ?></span>
+    <!-- ── Section 2: Schedule ────────────────────────────────── -->
+    <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px;">
+        <label class="config-toggle-row">
+            <span class="config-section-label" style="margin:0;">Auto-rotation</span>
+            <span class="config-toggle-wrap">
+                <input type="checkbox" id="scheduleToggle" class="config-toggle-input"
+                       <?= $scheduleOn ? 'checked' : '' ?>>
+                <span class="config-toggle-track"></span>
+            </span>
+        </label>
+        <div class="config-section-hint" style="margin-top:2px;">
+            When enabled, cron rotates this secret automatically on the schedule below.
         </div>
-        <div class="form-hint">Set to 0 to only rotate manually.</div>
+
+        <div id="scheduleFields" style="margin-top:12px;<?= $scheduleOn ? '' : 'display:none;' ?>">
+            <label class="form-label">Rotate every</label>
+            <div class="input-with-suffix">
+                <input type="number" name="interval" min="1" value="<?= $savedInterval ?>"
+                       placeholder="e.g. 7">
+                <select name="interval_unit" class="form-control" style="width:auto;min-width:95px;border:none;border-left:1px solid var(--border);border-radius:0;background:var(--bg-base);">
+                    <?php foreach (['minute' => 'minutes', 'hour' => 'hours', 'day' => 'days'] as $val => $lbl): ?>
+                        <option value="<?= $val ?>" <?= $savedUnit === $val ? 'selected' : '' ?>><?= $lbl ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <!-- When schedule is OFF send interval=0 so backend treats it as on-demand -->
+        <input type="hidden" name="interval" id="intervalFallback" value="0"
+               <?= $scheduleOn ? 'disabled' : '' ?>>
     </div>
 
-    <div class="form-group" id="manualValueGroup">
-        <label class="form-label">Manual Value (optional)</label>
-        <input type="text" name="manual_value" class="form-control" placeholder="Leave blank to auto-generate">
-        <div class="form-hint">Provide a specific value, or leave blank for auto-generation.</div>
-    </div>
-
+    <!-- ── Actions ───────────────────────────────────────────── -->
     <div class="modal-actions">
-        <button type="submit" name="mode" value="rotate_only" class="btn btn-ghost btn-md">
-            <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
-            Rotate Now
-        </button>
-        <button type="submit" name="mode" value="save_only" class="btn btn-ghost btn-md">
+        <button type="submit" name="mode" value="save_only" class="btn btn-primary btn-md" style="width:100%;justify-content:center;">
             <i data-lucide="save" style="width:13px;height:13px;"></i>
             Save Config
         </button>
     </div>
-    <div class="modal-actions-primary">
-        <button type="submit" name="mode" value="save_and_rotate" class="btn btn-primary btn-md">
-            <i data-lucide="zap" style="width:13px;height:13px;"></i>
-            Save + Rotate
-        </button>
-    </div>
+
     <div class="form-hint htmx-indicator" id="configSavingIndicator" style="margin-top:8px;">
         Applying changes...
     </div>
 </form>
 
-<?php if ($config): ?>
-<div class="delete-zone" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+<?php if ($hasConfig): ?>
+<div class="delete-zone" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">
     <div style="display:flex;align-items:center;justify-content:space-between;">
         <div>
             <div style="font-weight:500;font-size:13px;margin-bottom:2px;color:var(--danger);">Stop Managing</div>
-            <div style="font-size:11px;color:var(--text-secondary);">Remove auto-rotation config (does not delete the Railway variable)</div>
+            <div style="font-size:11px;color:var(--text-secondary);">Removes rotation config — does not delete the Railway variable.</div>
         </div>
-        <button type="button" 
-                   class="btn btn-danger btn-sm js-delete-config"
-                   data-secret-name="<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>"
-                   data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>">
+        <button type="button"
+                class="btn btn-danger btn-sm js-delete-config"
+                data-secret-name="<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>"
+                data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>">
             <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
-            Delete Config
+            Remove
         </button>
     </div>
 </div>

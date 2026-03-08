@@ -13,12 +13,11 @@
  * @var array $managed
  * @var array $recentHistory
  * @var int $cacheFetchedAt
- * @var array $timeConfig
  */
 
 $pageScript = 'dashboard.js';
 
-$contentCallback = function() use ($viewTitle, $csrfToken, $serviceId, $section, $variables, $managed, $recentHistory, $cacheFetchedAt, $timeConfig, $serviceCount, $rotations24h) {
+$contentCallback = function() use ($viewTitle, $csrfToken, $serviceId, $section, $variables, $managed, $recentHistory, $cacheFetchedAt, $serviceCount, $rotations24h) {
     include __DIR__ . '/components/dashboard-main.php';
 };
 
