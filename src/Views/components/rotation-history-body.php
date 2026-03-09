@@ -21,19 +21,24 @@
         <?php
         $historyId = (int)($item['id'] ?? 0);
         $secretName = (string)($item['secret_name'] ?? '');
-        $serviceId = (string)($item['service_id'] ?? '');
-        $serviceLabel = $serviceId !== '' ? ($serviceNameMap[$serviceId] ?? $serviceId) : 'Global';
+        $serviceId    = (string)($item['service_id'] ?? '');
+        $serviceLabel = $serviceId !== ''
+            ? ($item['service_name'] ?? ($serviceNameMap[$serviceId] ?? $serviceId))
+            : 'Global';
         $rotatedAt = (string)($item['rotated_at'] ?? '');
         $triggerType = (string)($item['trigger_type'] ?? 'manual');
-        $isAuto = $triggerType === 'auto';
+        $isAuto     = $triggerType === 'auto';
+        $isRollback = $triggerType === 'rollback';
+        $badgeClass = $isAuto ? 'trigger-auto' : ($isRollback ? 'trigger-rollback' : 'trigger-manual');
+        $badgeLabel = $isAuto ? 'auto' : ($isRollback ? 'rollback' : 'manual');
         ?>
         <tr class="history-row js-history-row" data-history-id="<?= (int)$historyId ?>">
             <td>
                 <div class="history-entry">
                     <span class="history-secret-name"><?= htmlspecialchars($secretName) ?></span>
                     <span class="history-service-badge"><?= htmlspecialchars($serviceLabel) ?></span>
-                    <span class="history-trigger-badge <?= $isAuto ? 'trigger-auto' : 'trigger-manual' ?>">
-                        <?= $isAuto ? 'auto' : 'manual' ?>
+                    <span class="history-trigger-badge <?= $badgeClass ?>">
+                        <?= $badgeLabel ?>
                     </span>
                 </div>
             </td>

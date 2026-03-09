@@ -132,7 +132,15 @@
             </button>
         </div>
         <div class="modal-actions" style="margin-top:16px;">
-            <button type="button" class="btn btn-primary btn-md js-close-history-modal">Close</button>
+            <button type="button" class="btn btn-ghost btn-md js-close-history-modal" style="flex:1;">Close</button>
+            <button type="button" class="btn btn-danger btn-md" id="historyRollbackBtn"
+                    data-secret-name=""
+                    data-service-id=""
+                    data-history-id=""
+                    style="flex:1;">
+                <i data-lucide="undo-2" style="width:13px;height:13px;"></i>
+                Rollback to this
+            </button>
         </div>
     </div>
 </div>
@@ -171,64 +179,7 @@
     </div>
 </div>
 
-<script>
-    /**
-     * Global modal and dialog management
-     */
-    window.confirmDialog = function(title, message, onConfirm) {
-        const modal = document.getElementById('confirmationModal');
-        const titleEl = document.getElementById('confirmationTitle');
-        const msgEl = document.getElementById('confirmationMessage');
-        const okBtn = document.getElementById('confirmationOkBtn');
-        
-        titleEl.textContent = title;
-        msgEl.textContent = message;
-        
-        const handler = () => {
-            okBtn.removeEventListener('click', handler);
-            modal.classList.remove('open');
-            if (typeof onConfirm === 'function') {
-                onConfirm();
-            }
-        };
-        
-        okBtn.addEventListener('click', handler);
-        modal.classList.add('open');
-    };
 
-    // Close confirmation modal handlers
-    document.querySelectorAll('.js-close-confirmation').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.getElementById('confirmationModal').classList.remove('open');
-        });
-    });
-
-    // Close group modal handler
-    document.querySelectorAll('.js-close-group-modal').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.getElementById('groupModal').classList.remove('open');
-        });
-    });
-
-    // Close history modal handler
-    document.querySelectorAll('.js-close-history-modal').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.getElementById('historyModal').classList.remove('open');
-        });
-    });
-
-    // Close modals on overlay click
-    ['confirmationModal', 'configModal', 'historyModal', 'groupModal'].forEach(modalId => {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.addEventListener('click', (event) => {
-                if (event.target === modal) {
-                    modal.classList.remove('open');
-                }
-            });
-        }
-    });
-</script>
 
 </body>
 </html>

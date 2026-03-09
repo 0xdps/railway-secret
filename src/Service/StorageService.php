@@ -275,17 +275,25 @@ class StorageService
         $limit = max(1, min($limit, 200));
 
         if ($serviceId === null) {
-            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, trigger_type, rotated_at
-                FROM secret_history
-                ORDER BY datetime(rotated_at) DESC, id DESC
-                LIMIT :limit");
+            $stmt = $this->db->prepare(
+                "SELECT sh.id, sh.secret_name, sh.service_id, sh.trigger_type, sh.rotated_at,
+                        sm.service_name
+                 FROM secret_history sh
+                 LEFT JOIN service_metadata sm ON sh.service_id = sm.service_id
+                 ORDER BY datetime(sh.rotated_at) DESC, sh.id DESC
+                 LIMIT :limit"
+            );
             $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
         } else {
-            $stmt = $this->db->prepare("SELECT id, secret_name, service_id, trigger_type, rotated_at
-                FROM secret_history
-                WHERE service_id = :sid
-                ORDER BY datetime(rotated_at) DESC, id DESC
-                LIMIT :limit");
+            $stmt = $this->db->prepare(
+                "SELECT sh.id, sh.secret_name, sh.service_id, sh.trigger_type, sh.rotated_at,
+                        sm.service_name
+                 FROM secret_history sh
+                 LEFT JOIN service_metadata sm ON sh.service_id = sm.service_id
+                 WHERE sh.service_id = :sid
+                 ORDER BY datetime(sh.rotated_at) DESC, sh.id DESC
+                 LIMIT :limit"
+            );
             $stmt->bindValue(':sid', $serviceId, SQLITE3_TEXT);
             $stmt->bindValue(':limit', $limit, SQLITE3_INTEGER);
         }

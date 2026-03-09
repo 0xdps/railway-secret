@@ -88,6 +88,13 @@ $rowId = 'secret-' . md5($keyId);
                     hx-swap="innerHTML">
                 <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
             </button>
+            <button class="btn-icon js-rollback-btn"
+                    type="button"
+                    title="Rollback last rotation"
+                    data-secret-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
+                    data-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <i data-lucide="undo-2" style="width:13px;height:13px;"></i>
+            </button>
             <?php endif; ?>
             <button class="btn-icon js-open-config-modal"
                     type="button"

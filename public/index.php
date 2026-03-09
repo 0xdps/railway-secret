@@ -531,6 +531,62 @@ if ($path === '/api/manage' && $method === 'POST') {
     exit;
 }
 
+if ($path === '/api/rollback' && $method === 'POST') {
+    $keyName   = $_POST['key'] ?? '';
+    $serviceId = ($_POST['serviceId'] ?? '') ?: null;
+    $historyId = isset($_POST['historyId']) ? (int)$_POST['historyId'] : 0;
+
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+        if (!isValidSecretName($keyName)) {
+            throw new InvalidArgumentException('Invalid secret name');
+        }
+
+        // Capture the current live value before rollback so we can record it in history
+        $currentVars  = $railway->getVariables($projectId, $environmentId, $serviceId);
+        $currentValue = $currentVars[$keyName] ?? null;
+
+        if ($historyId > 0) {
+            // Restore the specific old value recorded in that history entry
+            $detail = $storage->getHistoryDetailById($historyId);
+            if ($detail === null || ($detail['secret_name'] ?? '') !== $keyName) {
+                throw new InvalidArgumentException('History entry not found');
+            }
+            $restoredValue = $detail['old_value'] ?? null;
+            if ($restoredValue === null || $restoredValue === '') {
+                throw new RuntimeException('No recoverable value in that history entry');
+            }
+            $success = $railway->upsertVariable($projectId, $environmentId, $keyName, $restoredValue, $serviceId);
+        } else {
+            // Undo the most-recent rotation
+            $history = $storage->getHistory($keyName, $serviceId);
+            if (empty($history)) {
+                throw new RuntimeException('No history found for this secret');
+            }
+            $restoredValue = $history[0]['secret_value'];
+            $success = $railway->upsertVariable($projectId, $environmentId, $keyName, $restoredValue, $serviceId);
+        }
+
+        if ($success) {
+            // Record the rollback in history so it appears labelled in the history table
+            $storage->addHistory($keyName, $currentValue, $serviceId, 'rollback');
+            $storage->updateLatestHistoryNewValue($keyName, $serviceId, $restoredValue);
+            invalidateVariableCache($cache, $projectId, $environmentId, $serviceId);
+            sendApiJson(200, ['success' => true]);
+        } else {
+            sendApiJson(500, ['success' => false, 'error' => 'Rollback failed — no history found or API error']);
+        }
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Rollback API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 if ($path === '/api/rotate' && $method === 'POST') {
     $keyName = $_POST['key'] ?? '';
     $serviceId = $_POST['serviceId'] ?: null;

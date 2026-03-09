@@ -12,6 +12,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const groupModal = document.getElementById('groupModal');
     const csrfToken = document.body.dataset.csrfToken || '';
 
+    window.confirmDialog = function(title, message, onConfirm) {
+        const modal = document.getElementById('confirmationModal');
+        const titleEl = document.getElementById('confirmationTitle');
+        const msgEl = document.getElementById('confirmationMessage');
+        const okBtn = document.getElementById('confirmationOkBtn');
+
+        titleEl.textContent = title;
+        msgEl.innerHTML = message;
+
+        const handler = () => {
+            okBtn.removeEventListener('click', handler);
+            modal.classList.remove('open');
+            if (typeof onConfirm === 'function') {
+                onConfirm();
+            }
+        };
+
+        okBtn.addEventListener('click', handler);
+        modal.classList.add('open');
+    };
+
+    // Modal close handlers (moved from inline script to satisfy script-src CSP)
+    document.querySelectorAll('.js-close-confirmation').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('confirmationModal').classList.remove('open');
+        });
+    });
+
+    document.querySelectorAll('.js-close-group-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('groupModal').classList.remove('open');
+        });
+    });
+
+    document.querySelectorAll('.js-close-history-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.getElementById('historyModal').classList.remove('open');
+        });
+    });
+
+    ['confirmationModal', 'configModal', 'historyModal', 'groupModal'].forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.classList.remove('open');
+                }
+            });
+        }
+    });
+
     function refreshIcons() {
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
             window.lucide.createIcons();
@@ -161,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function openHistoryModal(secret, service, rotatedAt, oldValue, newValue, newValueIsLive, triggerType, historyId) {
+    function openHistoryModal(secret, service, rotatedAt, oldValue, newValue, newValueIsLive, triggerType, historyId, serviceId) {
         if (!historyModal) return;
 
         const secretEl  = document.getElementById('historyDetailSecret');
@@ -172,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newValueEl    = document.getElementById('historyDetailNewValue');
         const newValueHint  = document.getElementById('historyDetailNewValueHint');
         const showCurrentBtn = document.getElementById('historyShowCurrentBtn');
+        const rollbackBtn    = document.getElementById('historyRollbackBtn');
 
         if (secretEl)  secretEl.textContent  = secret  || '--';
         if (serviceEl) serviceEl.textContent = service || '--';
@@ -211,6 +263,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newValueHint) {
             newValueHint.textContent = newValue ? '(after rotation)' : '';
             newValueHint.className = 'history-values-hint';
+        }
+
+        // Populate rollback button — only show when there's an old value to restore
+        if (rollbackBtn) {
+            rollbackBtn.dataset.secretName = secret || '';
+            rollbackBtn.dataset.serviceId  = serviceId || '';
+            rollbackBtn.dataset.historyId  = historyId || '';
+            rollbackBtn.style.display = oldValue ? '' : 'none';
         }
 
         historyModal.classList.add('open');
@@ -648,11 +708,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.new_value || null,
                 !!data.new_value_is_live,
                 data.trigger_type || 'manual',
-                data.id
+                data.id,
+                data.service_id || ''
             );
         } catch (error) {
             showToast('Unable to load history values', 'error');
         }
+    });
+
+    // Rollback from history modal
+    document.body.addEventListener('click', async (event) => {
+        const btn = event.target.closest('#historyRollbackBtn');
+        if (!btn) return;
+
+        const secretName = btn.dataset.secretName || '';
+        const serviceId  = btn.dataset.serviceId  || '';
+        const historyId  = btn.dataset.historyId  || '';
+        if (!secretName) return;
+
+        window.confirmDialog(
+            'Rollback secret',
+            `Restore <strong>${secretName}</strong> to the value it held <em>before</em> this rotation? This will trigger a Railway redeploy.`,
+            async () => {
+                btn.disabled = true;
+                try {
+                    const fd = new FormData();
+                    fd.append('key', secretName);
+                    fd.append('serviceId', serviceId);
+                    fd.append('historyId', historyId);
+                    fd.append('csrf_token', csrfToken);
+                    const res = await fetch('/api/rollback', { method: 'POST', body: fd });
+                    const json = await res.json();
+                    if (!res.ok || !json.success) {
+                        showToast(json.error || 'Rollback failed', 'error');
+                    } else {
+                        showToast(`${secretName} rolled back`, 'success');
+                        document.getElementById('historyModal')?.classList.remove('open');
+                    }
+                } catch {
+                    showToast('Rollback failed', 'error');
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+        );
+    });
+
+    // Rollback from secret row (undo last rotation)
+    document.body.addEventListener('click', async (event) => {
+        const btn = event.target.closest('.js-rollback-btn');
+        if (!btn) return;
+
+        const secretName = btn.dataset.secretName || '';
+        const serviceId  = btn.dataset.serviceId  || '';
+        if (!secretName) return;
+
+        window.confirmDialog(
+            'Rollback last rotation',
+            `Restore <strong>${secretName}</strong> to the value it held before its last rotation? This will trigger a Railway redeploy.`,
+            async () => {
+                btn.disabled = true;
+                try {
+                    const fd = new FormData();
+                    fd.append('key', secretName);
+                    fd.append('serviceId', serviceId);
+                    fd.append('csrf_token', csrfToken);
+                    const res = await fetch('/api/rollback', { method: 'POST', body: fd });
+                    const json = await res.json();
+                    if (!res.ok || !json.success) {
+                        showToast(json.error || 'Rollback failed', 'error');
+                    } else {
+                        showToast(`${secretName} rolled back`, 'success');
+                    }
+                } catch {
+                    showToast('Rollback failed', 'error');
+                } finally {
+                    btn.disabled = false;
+                }
+            }
+        );
     });
 
     document.body.addEventListener('click', async (event) => {
