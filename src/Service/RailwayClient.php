@@ -149,4 +149,30 @@ class RailwayClient
 
         return $this->request($query, ['input' => $input])['variableUpsert'] ?? false;
     }
+
+    /**
+     * Upsert multiple variables in one API call, triggering a single redeploy
+     * instead of one redeploy per variable.
+     *
+     * @param array $vars  [ 'VAR_NAME' => 'value', ... ]
+     */
+    public function upsertVariables(string $projectId, string $environmentId, array $vars, ?string $serviceId = null): bool
+    {
+        $query = '
+        mutation VariableCollectionUpsert($input: VariableCollectionUpsertInput!) {
+          variableCollectionUpsert(input: $input)
+        }';
+
+        $input = [
+            'projectId'     => $projectId,
+            'environmentId' => $environmentId,
+            'variables'     => $vars,
+        ];
+
+        if ($serviceId) {
+            $input['serviceId'] = $serviceId;
+        }
+
+        return $this->request($query, ['input' => $input])['variableCollectionUpsert'] ?? false;
+    }
 }

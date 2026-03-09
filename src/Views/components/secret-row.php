@@ -17,6 +17,7 @@ $rowId = 'secret-' . md5($keyId);
 <tr class="secret-tr" 
     id="<?= htmlspecialchars($rowId) ?>"
     data-is-railway="<?= $isRailway ? '1' : '0' ?>"
+    data-is-managed="<?= $isManaged ? '1' : '0' ?>"
     data-key-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>">
 
     <!-- Secret Name + Value -->

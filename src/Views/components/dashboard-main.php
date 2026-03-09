@@ -123,6 +123,13 @@
         </div>
 
         <?php elseif ($currentSection !== 'history'): ?>
+        <div class="sort-bar">
+            <span class="sort-label">Sort:</span>
+            <button class="sort-btn active" data-sort="name-asc" type="button">Name A→Z</button>
+            <button class="sort-btn" data-sort="name-desc" type="button">Name Z→A</button>
+            <button class="sort-btn" data-sort="managed-first" type="button">Managed first</button>
+            <button class="sort-btn" data-sort="unmanaged-first" type="button">Unmanaged first</button>
+        </div>
         <div class="panel">
             <table class="data-table">
                 <colgroup>

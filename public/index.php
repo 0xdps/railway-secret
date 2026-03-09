@@ -138,9 +138,11 @@ function getVariablesCached(
     }
 
     $variables = $railway->getVariables($projectId, $environmentId, $serviceId);
+    $names = array_keys($variables);
+    sort($names, SORT_NATURAL | SORT_FLAG_CASE);
     // Store only names — values are never persisted to the cache DB.
-    $cache->put($key, array_keys($variables), CACHE_TTL_VARIABLES_SECONDS);
-    return array_keys($variables);
+    $cache->put($key, $names, CACHE_TTL_VARIABLES_SECONDS);
+    return $names;
 }
 
 function invalidateVariableCache(RailwayCacheService $cache, string $projectId, string $environmentId, ?string $serviceId): void
@@ -421,7 +423,7 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://unpkg.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://avatars.githubusercontent.com; connect-src 'self' https://unpkg.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'");
 
 // Basic Routing
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -564,6 +566,79 @@ if ($path === '/api/rotate' && $method === 'POST') {
         sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
     } catch (\Exception $e) {
         error_log('Rotate API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
+if ($path === '/api/rotate-all-due' && $method === 'POST') {
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+
+        $managed    = $storage->getManagedSecrets();
+        $dueSecrets = [];
+
+        foreach ($managed as $config) {
+            $interval = (int)($config['interval_days'] ?? 0);
+            if ($interval === 0) {
+                continue;
+            }
+
+            $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
+            $secret     = $config['secret_name'];
+            $serviceId  = $config['service_id'] ?: null;
+
+            $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
+            $isDue = $lastAutoTs === null ||
+                     ((time() - $lastAutoTs) / $timeConfig['divisor']) >= $interval;
+
+            if (!$isDue) {
+                continue;
+            }
+
+            $dueSecrets[] = array_merge($config, [
+                'service_id'   => $serviceId,
+                'trigger_type' => 'auto',
+            ]);
+        }
+
+        if (empty($dueSecrets)) {
+            sendApiJson(200, ['success' => true, 'rotated' => 0, 'errors' => [], 'message' => 'No secrets are due for rotation']);
+            exit;
+        }
+
+        // Batch rotate: one Railway API call (one redeploy) per service scope
+        $results = $rotator->rotateBatch($dueSecrets, $projectId, $environmentId);
+
+        $rotated = 0;
+        $errors  = [];
+
+        foreach ($results as $name => $result) {
+            if ($result === 'success') {
+                // Invalidate variable cache for the scope this secret belongs to
+                $svcId = null;
+                foreach ($dueSecrets as $item) {
+                    if ($item['secret_name'] === $name) {
+                        $svcId = $item['service_id'] ?: null;
+                        break;
+                    }
+                }
+                invalidateVariableCache($cache, $projectId, $environmentId, $svcId);
+                $rotated++;
+            } else {
+                $errors[] = $name;
+                error_log('Rotate all due error for ' . $name . ': ' . $result);
+            }
+        }
+
+        $message = "{$rotated} secret" . ($rotated === 1 ? '' : 's') . ' rotated';
+        sendApiJson(200, ['success' => true, 'rotated' => $rotated, 'errors' => $errors, 'message' => $message]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Rotate all due: ' . $e->getMessage());
         sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
     }
     exit;
@@ -960,6 +1035,60 @@ if ($path === '/api/service-group/bulk' && $method === 'POST') {
     } catch (\Exception $e) {
         error_log('Bulk service group API error: ' . $e->getMessage());
         sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
+// Managed Overview
+if ($path === '/managed') {
+    $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
+    $viewTitle = 'Managed Secrets';
+    $section = 'managed';
+    $serviceId = null;
+    try {
+        $services = getServicesCached($railway, $cache, $projectId, false);
+        $storage->syncServiceNames($services);
+        $groupedServices = buildGroupedServices($services, $storage->getServiceGroupMap());
+        $serviceNameMap = buildServiceNameMap($services);
+        $allManaged = $storage->getAllManagedWithServiceNames();
+        if ($isHtmx) {
+            include __DIR__ . '/../src/Views/components/managed-main.php';
+        } else {
+            include __DIR__ . '/../src/Views/managed.php';
+        }
+    } catch (\Exception $e) {
+        error_log('Managed page error: ' . $e->getMessage());
+        $groupedServices = $groupedServices ?? [];
+        $serviceNameMap = $serviceNameMap ?? [];
+        $allManaged = [];
+        if ($isHtmx) {
+            include __DIR__ . '/../src/Views/components/managed-main.php';
+        } else {
+            include __DIR__ . '/../src/Views/managed.php';
+        }
+    }
+    exit;
+}
+
+// About
+if ($path === '/about') {
+    $services = [];
+    $groupedServices = [];
+    try {
+        $services = getServicesCached($railway, $cache, $projectId, false);
+        $storage->syncServiceNames($services);
+        $groupedServices = buildGroupedServices($services, $storage->getServiceGroupMap());
+    } catch (\Exception $e) {
+        error_log('About Railway services error: ' . $e->getMessage());
+    }
+
+    $isHtmx = isset($_SERVER['HTTP_HX_REQUEST']) && $_SERVER['HTTP_HX_REQUEST'] === 'true';
+    $section = 'about';
+    $viewTitle = 'About';
+    if ($isHtmx) {
+        include __DIR__ . '/../src/Views/components/about-content.php';
+    } else {
+        include __DIR__ . '/../src/Views/about.php';
     }
     exit;
 }

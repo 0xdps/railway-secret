@@ -56,11 +56,14 @@ if (empty($managed)) {
 echo "Starting scheduled rotations (" . date('Y-m-d H:i:s') . ")...\n";
 echo str_repeat('-', 60) . "\n";
 
+// Pass 1 — determine which secrets are due for rotation
+$dueSecrets = [];
+
 foreach ($managed as $key => $config) {
-    $interval  = (int)($config['interval_days'] ?? 0);
+    $interval   = (int)($config['interval_days'] ?? 0);
     $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
-    $secret    = $config['secret_name'];
-    $serviceId = $config['service_id'] ?: null;
+    $secret     = $config['secret_name'];
+    $serviceId  = $config['service_id'] ?: null;
     $scopeLabel = $serviceId ? "service:{$serviceId}" : 'global';
 
     // Skip secrets configured for manual-only rotation
@@ -71,43 +74,77 @@ foreach ($managed as $key => $config) {
 
     // Check last AUTOMATIC rotation time (ignore manual rotations for scheduling).
     // Apply a 5-minute buffer so a cron that runs slightly late is not double-triggered.
-    $bufferSeconds = 5 * 60; // 5 minutes in seconds
+    $bufferSeconds = 5 * 60;
     $bufferInUnits = $bufferSeconds / $timeConfig['divisor'];
 
-    $lastAutoTs  = $storage->getLastAutoRotatedAt($secret, $serviceId);
-    $shouldRotate = false;
+    $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
 
     if ($lastAutoTs === null) {
-        $shouldRotate = true; // Never been auto-rotated — do it now
+        $isDue  = true;
         $reason = 'first automatic rotation';
     } else {
         $elapsed = (time() - $lastAutoTs) / $timeConfig['divisor'];
-
-        // Rotate if we are within the interval window, allowing a 5-min early buffer
-        if ($elapsed >= ($interval - $bufferInUnits)) {
-            $shouldRotate = true;
-            $reason = sprintf('%.1f %s since last auto rotation (interval: %d %s, buffer: 5 min)',
-                $elapsed, $timeConfig['label'], $interval, $timeConfig['label']);
-        } else {
-            $reason = sprintf('%.1f / %d %s elapsed since last auto rotation', $elapsed, $interval, $timeConfig['label']);
-        }
+        $isDue   = $elapsed >= ($interval - $bufferInUnits);
+        $reason  = $isDue
+            ? sprintf('%.1f %s since last auto rotation (interval: %d %s, buffer: 5 min)',
+                $elapsed, $timeConfig['label'], $interval, $timeConfig['label'])
+            : sprintf('%.1f / %d %s elapsed since last auto rotation', $elapsed, $interval, $timeConfig['label']);
     }
 
-    if ($shouldRotate) {
-        echo "  ROTATE {$secret} ({$scopeLabel}) — {$reason}... ";
-        try {
-            if ($rotator->rotate($secret, $projectId, $environmentId, $serviceId, null, null, null, 'auto')) {
-                echo "OK\n";
-            } else {
-                echo "FAILED (rotator returned false)\n";
-            }
-        } catch (\Exception $e) {
-            echo "ERROR: " . $e->getMessage() . "\n";
-        }
+    if ($isDue) {
+        $dueSecrets[] = array_merge($config, [
+            'service_id'   => $serviceId,
+            'trigger_type' => 'auto',
+            '_reason'      => $reason,
+            '_scope'       => $scopeLabel,
+        ]);
     } else {
         echo "  SKIP   {$secret} ({$scopeLabel}) — {$reason}\n";
     }
 }
 
 echo str_repeat('-', 60) . "\n";
-echo "Done.\n";
+
+if (empty($dueSecrets)) {
+    echo "No secrets are due for rotation.\n";
+    echo "Done.\n";
+    exit(0);
+}
+
+// Show what will be rotated, grouped by scope
+$grouped = [];
+foreach ($dueSecrets as $item) {
+    $grouped[$item['_scope']][] = $item['secret_name'];
+}
+foreach ($grouped as $scope => $names) {
+    $count = count($names);
+    $noun  = $count === 1 ? 'secret' : 'secrets';
+    echo "  QUEUED {$count} {$noun} in {$scope} — 1 redeploy for this scope\n";
+    foreach ($names as $name) {
+        echo "         • {$name}\n";
+    }
+}
+echo str_repeat('-', 60) . "\n";
+
+// Pass 2 — batch rotate: one Railway API call (one redeploy) per service scope
+$results = $rotator->rotateBatch($dueSecrets, $projectId, $environmentId);
+
+$totalOk  = 0;
+$totalErr = 0;
+
+foreach ($results as $name => $result) {
+    if ($result === 'success') {
+        echo "  OK     {$name}\n";
+        $totalOk++;
+    } else {
+        echo "  ERROR  {$name}: {$result}\n";
+        $totalErr++;
+    }
+}
+
+echo str_repeat('-', 60) . "\n";
+$summary = "Done. {$totalOk} rotated";
+if ($totalErr > 0) {
+    $summary .= ", {$totalErr} failed";
+}
+echo $summary . ".\n";

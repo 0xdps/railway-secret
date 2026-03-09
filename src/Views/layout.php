@@ -45,6 +45,25 @@
 
 </div><!-- /app-layout -->
 
+<!-- ── Site Footer ──────────────────────────────────────────────── -->
+<?php global $appConfig; $dev = $appConfig['dev']; ?>
+<footer class="site-footer">
+    <span class="site-footer-credit">
+        Made with <span class="footer-heart">&#9829;</span> by
+        <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($dev['name'], ENT_QUOTES, 'UTF-8') ?></a>
+    </span>
+    <nav class="site-footer-nav">
+        <a href="/about"
+           class="footer-link"
+           hx-get="/about"
+           hx-target="#mainContent"
+           hx-swap="outerHTML"
+           hx-push-url="true">About</a>
+        <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>
+        <a href="<?= htmlspecialchars($dev['support'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Support ↗</a>
+    </nav>
+</footer>
+
 <!-- ── Confirmation Modal ──────────────────────────────────────────── -->
 <div class="modal-overlay" id="confirmationModal" style="z-index: 600;">
     <div class="modal-box" style="max-width:380px;">

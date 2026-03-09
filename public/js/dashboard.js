@@ -56,6 +56,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.js-history-nav').forEach((link) => {
             link.classList.toggle('active', currentSection === 'history');
         });
+
+        document.querySelectorAll('.js-managed-nav').forEach((link) => {
+            link.classList.toggle('active', currentSection === 'managed');
+        });
+
+        document.querySelectorAll('.js-docs-nav').forEach((link) => {
+            link.classList.toggle('active', currentSection === 'docs');
+        });
+
+        document.querySelectorAll('.js-about-nav').forEach((link) => {
+            link.classList.toggle('active', currentSection === 'about');
+        });
     }
 
     function formatRelativeAge(secondsAgo) {
@@ -271,6 +283,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make available for any future non-inline integrations.
     window.filterRailwayVars = applyFilters;
 
+    function sortTable(sortKey) {
+        const tbody = document.getElementById('secrets-table-body');
+        if (!tbody) return;
+        const rows = Array.from(tbody.querySelectorAll('.secret-tr'));
+        rows.sort((a, b) => {
+            const nameA = (a.dataset.keyName || '').toLowerCase();
+            const nameB = (b.dataset.keyName || '').toLowerCase();
+            const managedA = a.dataset.isManaged === '1';
+            const managedB = b.dataset.isManaged === '1';
+            switch (sortKey) {
+                case 'name-desc':
+                    return nameB.localeCompare(nameA);
+                case 'managed-first':
+                    if (managedA !== managedB) return managedA ? -1 : 1;
+                    return nameA.localeCompare(nameB);
+                case 'unmanaged-first':
+                    if (managedA !== managedB) return managedA ? 1 : -1;
+                    return nameA.localeCompare(nameB);
+                default: // name-asc
+                    return nameA.localeCompare(nameB);
+            }
+        });
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
     function relativeTime(dateStr) {
         if (!dateStr) return dateStr;
         const date = new Date(dateStr.replace(' ', 'T') + 'Z');
@@ -394,6 +431,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Open/close modal controls without inline handlers.
     document.body.addEventListener('click', async (event) => {
+        const sortBtn = event.target.closest('.sort-btn');
+        if (sortBtn) {
+            document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
+            sortBtn.classList.add('active');
+            sortTable(sortBtn.dataset.sort || 'name-asc');
+            return;
+        }
+
+        const rotateDueBtn = event.target.closest('#rotateDueBtn');
+        if (rotateDueBtn) {
+            rotateDueBtn.disabled = true;
+            const originalHtml = rotateDueBtn.innerHTML;
+            rotateDueBtn.textContent = 'Rotating…';
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            fetch('/api/rotate-all-due', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(payload => {
+                    if (!payload.success) {
+                        showToast(payload.error || 'Rotation failed', 'error');
+                        return;
+                    }
+                    showToast(payload.message || 'Done', 'success');
+                    const mc = document.getElementById('mainContent');
+                    if (mc) {
+                        fetch('/managed', { headers: { 'HX-Request': 'true' } })
+                            .then(r => r.text())
+                            .then(html => {
+                                mc.outerHTML = html;
+                                refreshIcons();
+                                applyRelativeTimes();
+                                updateSidebarActive();
+                            })
+                            .catch(() => {});
+                    }
+                })
+                .catch(() => showToast('Unable to rotate', 'error'))
+                .finally(() => {
+                    rotateDueBtn.disabled = false;
+                    rotateDueBtn.innerHTML = originalHtml;
+                    refreshIcons();
+                });
+            return;
+        }
+
         const openBtn = event.target.closest('.js-open-config-modal');
         if (openBtn) {
             openConfigModal();
@@ -654,6 +736,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (source.closest && source.closest('#configModal')) {
             closeConfigModal();
+            // On the managed page, refresh the overview table since #secrets-table-body doesn't exist there.
+            const mainContent = document.getElementById('mainContent');
+            if (mainContent && mainContent.dataset.section === 'managed') {
+                fetch('/managed', { headers: { 'HX-Request': 'true' } })
+                    .then(r => r.text())
+                    .then(html => {
+                        mainContent.outerHTML = html;
+                        refreshIcons();
+                        applyRelativeTimes();
+                        updateSidebarActive();
+                    })
+                    .catch(() => {});
+            }
         }
     });
 

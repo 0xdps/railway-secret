@@ -397,6 +397,32 @@ class StorageService
         return (int)($row['cnt'] ?? 0);
     }
 
+    public function getAllManagedWithServiceNames(): array
+    {
+        $result = $this->db->query("
+            SELECT ms.secret_name, ms.service_id, ms.length, ms.encoding,
+                   ms.interval_days, ms.interval_unit,
+                   COALESCE(sm.service_name, 'Global') AS service_name,
+                   (SELECT rotated_at FROM secret_history
+                    WHERE secret_name = ms.secret_name
+                      AND (service_id = ms.service_id OR (service_id IS NULL AND ms.service_id IS NULL))
+                    ORDER BY datetime(rotated_at) DESC, id DESC LIMIT 1) AS last_rotated,
+                   (SELECT rotated_at FROM secret_history
+                    WHERE secret_name = ms.secret_name
+                      AND (service_id = ms.service_id OR (service_id IS NULL AND ms.service_id IS NULL))
+                      AND trigger_type = 'auto'
+                    ORDER BY datetime(rotated_at) DESC, id DESC LIMIT 1) AS last_auto_rotated
+            FROM managed_secrets ms
+            LEFT JOIN service_metadata sm ON ms.service_id = sm.service_id
+            ORDER BY service_name, ms.secret_name
+        ");
+        $rows = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+        return $rows;
+    }
+
     public function setServiceGroup(string $serviceId, ?string $groupName): void
     {
         $serviceId = trim($serviceId);

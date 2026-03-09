@@ -62,4 +62,82 @@ class RotatorService
         $previousValue = $history[0]['secret_value'];
         return $this->railway->upsertVariable($projectId, $environmentId, $keyName, $previousValue, $serviceId);
     }
+
+    /**
+     * Rotate multiple secrets with one Railway API call per service scope so that
+     * only one redeployment is triggered per service (instead of one per secret).
+     *
+     * @param  array  $dueSecrets  Each element must contain: secret_name, service_id,
+     *                              length, encoding, trigger_type.
+     * @return array  [ 'secret_name' => 'success' | 'error: …', … ]
+     */
+    public function rotateBatch(array $dueSecrets, string $projectId, string $environmentId): array
+    {
+        // Group secrets by service scope so all variables for the same service
+        // are pushed in a single variableCollectionUpsert call.
+        $byScope = [];
+        foreach ($dueSecrets as $item) {
+            $scope = $item['service_id'] ?: '__global__';
+            $byScope[$scope][] = $item;
+        }
+
+        $results = [];
+
+        foreach ($byScope as $scope => $secrets) {
+            $serviceId = $scope === '__global__' ? null : $scope;
+
+            // Fetch current variable values once per scope (needed for history).
+            try {
+                $currentVars = $this->railway->getVariables($projectId, $environmentId, $serviceId);
+            } catch (\Exception $e) {
+                foreach ($secrets as $item) {
+                    $results[$item['secret_name']] = 'error: ' . $e->getMessage();
+                }
+                continue;
+            }
+
+            // Generate a new value for every secret in this scope.
+            $newValues = [];
+            foreach ($secrets as $item) {
+                $name     = $item['secret_name'];
+                $length   = (int)($item['length'] ?? 32);
+                $encoding = $item['encoding'] ?? 'hex';
+                $newValues[$name] = CryptoService::generateSecret($length, $encoding);
+            }
+
+            // One batch upsert → one Railway redeploy for the whole scope.
+            try {
+                $success = $this->railway->upsertVariables($projectId, $environmentId, $newValues, $serviceId);
+            } catch (\Exception $e) {
+                foreach ($secrets as $item) {
+                    $results[$item['secret_name']] = 'error: ' . $e->getMessage();
+                }
+                continue;
+            }
+
+            if (!$success) {
+                foreach ($secrets as $item) {
+                    $results[$item['secret_name']] = 'error: batch upsert returned false';
+                }
+                continue;
+            }
+
+            // Record history for each rotated secret.
+            foreach ($secrets as $item) {
+                $name     = $item['secret_name'];
+                $oldValue = $currentVars[$name] ?? null;
+                $trigger  = $item['trigger_type'] ?? 'auto';
+
+                // Back-fill new_secret_value on the previous history row.
+                if ($oldValue !== null) {
+                    $this->storage->updateLatestHistoryNewValue($name, $serviceId, $oldValue);
+                }
+
+                $this->storage->addHistory($name, $oldValue, $serviceId, $trigger);
+                $results[$name] = 'success';
+            }
+        }
+
+        return $results;
+    }
 }

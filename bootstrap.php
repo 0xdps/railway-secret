@@ -41,6 +41,27 @@ if (file_exists($envFile)) {
 }
 
 /**
+ * Developer / app-level links — single source of truth.
+ * Update these values here; they propagate to the footer, About page, etc.
+ */
+$appConfig = [
+    'dev' => [
+        'name'      => 'Devendra Pratap Singh',
+        'handle'    => '@0xdps',
+        'avatar'    => 'https://avatars.githubusercontent.com/u/5993833?v=4',
+        'bio'       => 'Builder of small tools that scratch real itches. Mostly PHP, Go, and whatever the problem calls for. Runs too many side projects on Railway.',
+        'portfolio' => 'https://dps.codes',
+        'github'    => 'https://github.com/0xdps',
+        'support'   => 'https://buymeacoffee.com/0xdps',
+    ],
+    'repo' => [
+        'source'  => 'https://github.com/0xdps/railway-secrets',
+        'license' => 'https://github.com/0xdps/railway-secrets/blob/trunk/LICENSE',
+        'star'    => 'https://github.com/0xdps/railway-secrets',
+    ],
+];
+
+/**
  * Get configuration for a specific time unit.
  * @return array{divisor: int, label: string, suffix: string}
  */

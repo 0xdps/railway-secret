@@ -12,7 +12,7 @@ $currentSection = $section ?? 'secrets';
 ?>
 <aside class="sidebar">
     <div class="sidebar-brand">
-        <img src="/favicon.svg" alt="" class="brand-mark" width="16" height="16">
+        <img src="/favicon.svg" alt="" class="brand-mark" width="32" height="32">
         Railway Secrets
     </div>
 
@@ -36,6 +36,16 @@ $currentSection = $section ?? 'secrets';
            data-service-id="">
             <i data-lucide="layers" style="width:14px;height:14px;"></i>
             Global Variables
+        </a>
+        <a href="/managed"
+           class="nav-link js-managed-nav <?= $currentSection === 'managed' ? 'active' : '' ?>"
+           hx-get="/managed"
+           hx-target="#mainContent"
+           hx-swap="outerHTML"
+           hx-push-url="true"
+           hx-indicator="#mainContentLoading">
+            <i data-lucide="shield-check" style="width:14px;height:14px;"></i>
+            Managed
         </a>
         <?php $historyHref = $serviceId ? '/?serviceId=' . urlencode((string)$serviceId) . '&section=history' : '/?section=history'; ?>
         <a href="<?= htmlspecialchars($historyHref, ENT_QUOTES, 'UTF-8') ?>"
@@ -97,9 +107,19 @@ $currentSection = $section ?? 'secrets';
     <?php endif; ?>
 
     <div class="sidebar-footer">
-        <a href="/docs" class="nav-link <?= ($currentSection === 'docs' || strpos($_SERVER['REQUEST_URI'] ?? '', '/docs') === 0) ? 'active' : '' ?>">
+        <a href="/docs" class="nav-link js-docs-nav <?= ($currentSection === 'docs' || strpos($_SERVER['REQUEST_URI'] ?? '', '/docs') === 0) ? 'active' : '' ?>">
             <i data-lucide="book-open" style="width:14px;height:14px;"></i>
             Docs
+        </a>
+        <a href="/about"
+           class="nav-link js-about-nav <?= ($currentSection === 'about' || strpos($_SERVER['REQUEST_URI'] ?? '', '/about') === 0) ? 'active' : '' ?>"
+           hx-get="/about"
+           hx-target="#mainContent"
+           hx-swap="outerHTML"
+           hx-push-url="true"
+           hx-indicator="#mainContentLoading">
+            <i data-lucide="info" style="width:14px;height:14px;"></i>
+            About
         </a>
         <form method="POST" action="/logout" style="margin:0;">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
