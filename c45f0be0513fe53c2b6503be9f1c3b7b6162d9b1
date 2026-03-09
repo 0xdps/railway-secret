@@ -1,0 +1,53 @@
+src/Views/managed.php
+  1a4a271500156eee 1-20
+src/Views/components/dashboard-main.php
+  1a4a271500156eee 126-132
+src/Service/RotatorService.php
+  1a4a271500156eee 65-142
+src/Views/about.php
+  1a4a271500156eee 1-20
+bootstrap.php
+  1a4a271500156eee 44-50,52-63
+src/Views/components/secret-row.php
+  1a4a271500156eee 20
+public/js/dashboard.js
+  1a4a271500156eee 59-62,286-309,434-478,739-751
+cron.php
+  1a4a271500156eee 59-61,77,80,83,87-89,91,94-100,107-141,146-150
+src/Views/components/about-content.php
+  1a4a271500156eee 1-7,11-32,34-43,48-49,53-54,59-60,64-65,70-71,80-125,128-133,137,139-141,149-151,153-174,176-188,190-193,195,197,200,202-220,222-227
+src/Views/components/sidebar.php
+  1a4a271500156eee 40-49
+public/index.php
+  1a4a271500156eee 141-142,144-145,426,574-580,582-599,617,629,633-646,1042-1068,1073-1095
+src/Service/StorageService.php
+  1a4a271500156eee 400-425
+public/style.css
+  1a4a271500156eee 1525-1562,1564,1566
+src/Views/layout.php
+  1a4a271500156eee 48,50-52,54-61,64-66
+src/Views/components/managed-main.php
+  1a4a271500156eee 1-167
+src/Service/RailwayClient.php
+  1a4a271500156eee 152-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "c45f0be0513fe53c2b6503be9f1c3b7b6162d9b1",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 911,
+      "total_deletions": 31,
+      "accepted_lines": 856,
+      "overriden_lines": 52
+    }
+  }
+}
