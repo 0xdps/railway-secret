@@ -1,0 +1,27 @@
+src/Views/components/sidebar.php
+  1a4a271500156eee 66-76,79-81,83-84,87,89,93,97-109,112-116,120-124,130-138,143
+public/js/dashboard.js
+  1a4a271500156eee 268-270,272-283,286-320
+public/style.css
+  1a4a271500156eee 157-158,162-164,167-172,175-176,178-179,182-187,194-226,228-273,277-284,287-289,292,297-299,302-308,311-312,315-318,321-324,327
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "7716a95cadfcffe2a72307288828dcbc01bd609b",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 298,
+      "total_deletions": 52,
+      "accepted_lines": 248,
+      "overriden_lines": 12
+    }
+  }
+}
