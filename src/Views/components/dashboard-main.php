@@ -95,11 +95,40 @@
         <div class="overview-columns">
             <div class="panel overview-tips-panel">
                 <h3 class="overview-panel-title">Quick Reference</h3>
+                <?php
+                $allTips = [
+                    // Getting started / navigation
+                    'Click any service in the sidebar to browse and search its environment variables.',
+                    'Use <strong>Create Group</strong> (<code>+</code> next to Services) to organise services into collapsible named sets &mdash; great for large projects.',
+                    'Group collapse state is saved per browser &mdash; the group containing your active service always stays open automatically.',
+
+                    // Rotation workflow
+                    'A secret needs a <strong>config</strong> before it can be rotated. Click <strong>Configure</strong> on any unmanaged variable to set it up.',
+                    'Set <strong>Rotation Interval</strong> to <code>0</code> to keep a secret manual-only &mdash; scheduled rotation will skip it.',
+                    'Rotating multiple secrets in one service triggers a <strong>single redeploy</strong> &mdash; all changes land in one Railway update.',
+                    'Use <strong>hex</strong> encoding for tokens passed in URLs or headers; <strong>base64</strong> for compact binary-safe values; <strong>alphanumeric</strong> for maximum compatibility.',
+                    '<strong>Length</strong> is the number of random bytes before encoding &mdash; a 32-byte hex secret becomes a 64-character string.',
+
+                    // History & security
+                    'Railway Secrets never stores live secret values &mdash; only the <em>previous</em> value, encrypted, is saved after each successful rotation.',
+                    'Visit <strong>Rotation History</strong> to view, copy, or audit any previously rotated value across all services.',
+                    'Back up your <strong>MASTER_KEY</strong> env var. History entries are unreadable without it &mdash; there is no recovery path.',
+
+                    // Cache & sync
+                    'Hit <strong>Sync Cache</strong> on the secrets page if variables are not appearing after a recent Railway change.',
+                    'The cache holds metadata only (service names, variable names) &mdash; no secret values are ever cached.',
+
+                    // Scheduled rotation
+                    'The built-in scheduler runs every minute &mdash; your configured interval controls which secrets are due on each tick.',
+                    'Scheduled rotations and manual rotations use the exact same config and write to the same encrypted history.',
+                ];
+                shuffle($allTips);
+                $tips = array_slice($allTips, 0, 5);
+                ?>
                 <ul class="overview-list">
-                    <li>Use <strong>Create Group</strong> to organise services into named sets.</li>
-                    <li>Set <strong>Rotation Interval</strong> to <code>0</code> to disable auto-rotation.</li>
-                    <li>Hit <strong>Sync Cache</strong> if Railway changes are not visible yet.</li>
-                    <li>Open <strong>Rotation History</strong> to audit and inspect past values.</li>
+                    <?php foreach ($tips as $tip): ?>
+                        <li><?= $tip ?></li>
+                    <?php endforeach; ?>
                 </ul>
             </div>
             <div class="panel overview-activity-panel">
