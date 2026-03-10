@@ -265,7 +265,59 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.js-about-nav').forEach((link) => {
             link.classList.toggle('active', currentSection === 'about');
         });
+
+        // Auto-open the group containing the active service; restore others from storage.
+        syncGroupCollapseState(currentServiceId);
     }
+
+    // ── Sidebar group collapse ───────────────────────────────────────────────
+    const COLLAPSED_KEY = 'rs_collapsed_groups';
+
+    function getCollapsedGroups() {
+        try {
+            return new Set(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY) || '[]'));
+        } catch { return new Set(); }
+    }
+
+    function saveCollapsedGroups(set) {
+        try { window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set])); } catch {}
+    }
+
+    function syncGroupCollapseState(currentServiceId) {
+        const groups = document.querySelectorAll('.js-sidebar-group');
+        if (!groups.length) return;
+
+        const collapsed = getCollapsedGroups();
+
+        groups.forEach((group) => {
+            const slug = group.dataset.groupSlug || '';
+            // Check whether the active service lives in this group
+            const hasActive = Boolean(
+                currentServiceId && group.querySelector(`.js-grouped-service[data-service-id="${CSS.escape(currentServiceId)}"]`)
+            );
+            const shouldOpen = hasActive || !collapsed.has(slug);
+            group.classList.toggle('is-open', shouldOpen);
+            const toggleBtn = group.querySelector('.sidebar-group-toggle');
+            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        });
+    }
+
+    document.body.addEventListener('click', (event) => {
+        const toggleBtn = event.target.closest('.js-group-toggle');
+        if (!toggleBtn) return;
+
+        const group = toggleBtn.closest('.js-sidebar-group');
+        if (!group) return;
+
+        const slug = group.dataset.groupSlug || '';
+        const opening = !group.classList.contains('is-open');
+        group.classList.toggle('is-open', opening);
+        toggleBtn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+
+        const collapsed = getCollapsedGroups();
+        if (opening) { collapsed.delete(slug); } else { collapsed.add(slug); }
+        saveCollapsedGroups(collapsed);
+    });
 
     function formatRelativeAge(secondsAgo) {
         if (!Number.isFinite(secondsAgo) || secondsAgo < 0) {
