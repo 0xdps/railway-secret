@@ -1306,16 +1306,17 @@ select.custom-select-source {
 .input-with-suffix .custom-select-trigger {
     border: none;
     border-left: 1px solid var(--border);
-    border-radius: 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     background: var(--bg-base);
     min-width: 95px;
     padding-right: 28px;
 }
 
 .input-with-suffix .custom-select-menu {
-    left: auto;
+    left: 0;
     right: 0;
-    min-width: 140px;
+    min-width: unset;
+    width: 100%;
 }
 
 .form-hint {
@@ -1352,7 +1353,7 @@ select.custom-select-source {
     background: var(--bg-overlay);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    overflow: hidden;
+    overflow: visible;
     transition: border-color 0.12s, box-shadow 0.12s;
 }
 .input-with-suffix:focus-within {
@@ -1379,6 +1380,7 @@ select.custom-select-source {
     border-left: 1px solid var(--border);
     background: var(--bg-base);
     white-space: nowrap;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
 /* ─── Spinner ────────────────────────────────────────────────────────────── */
