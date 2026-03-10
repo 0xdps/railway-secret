@@ -19,6 +19,11 @@ class RotatorService
         $managed = $this->storage->getManagedSecrets();
         $key = ($serviceId ?: 'global') . ':' . $keyName;
         $config = $managed[$key] ?? ['length' => 32, 'encoding' => 'hex'];
+
+        $syncGroup = isset($config['sync_group']) ? trim((string)$config['sync_group']) : '';
+        if ($syncGroup !== '') {
+            return $this->rotateSyncGroup($syncGroup, $projectId, $environmentId, $manualValue, $triggerType, $length, $encoding);
+        }
         
         // 2. Apply overrides if provided (for one-off rotations)
         if ($length) $config['length'] = $length;
@@ -47,6 +52,66 @@ class RotatorService
         }
 
         return $success;
+    }
+
+    /**
+     * Rotate all managed secrets in a sync group using exactly one generated value.
+     * Each service scope still receives one Railway upsert call (one redeploy per scope).
+     */
+    public function rotateSyncGroup(
+        string $groupName,
+        string $projectId,
+        string $environmentId,
+        ?string $manualValue = null,
+        string $triggerType = 'manual',
+        ?int $lengthOverride = null,
+        ?string $encodingOverride = null
+    ): bool {
+        $members = $this->storage->getSyncGroupMembers($groupName);
+        if (empty($members)) {
+            return false;
+        }
+
+        $historyTrigger = str_starts_with($triggerType, 'sync-')
+            ? $triggerType
+            : ($triggerType === 'auto' ? 'sync-auto' : 'sync-manual');
+
+        $first = $members[0];
+        $length   = $lengthOverride   ?? (int)($first['length'] ?? 32);
+        $encoding = $encodingOverride ?? (string)($first['encoding'] ?? 'hex');
+        $newValue = $manualValue ?? CryptoService::generateSecret($length, $encoding);
+
+        $byScope = [];
+        foreach ($members as $member) {
+            $scope = (($member['service_id'] ?? '') !== '' ? (string)$member['service_id'] : '__global__');
+            $byScope[$scope][] = $member;
+        }
+
+        foreach ($byScope as $scope => $scopeMembers) {
+            $serviceId = $scope === '__global__' ? null : $scope;
+            $currentVars = $this->railway->getVariables($projectId, $environmentId, $serviceId);
+
+            $vars = [];
+            foreach ($scopeMembers as $member) {
+                $vars[(string)$member['secret_name']] = $newValue;
+            }
+
+            $success = $this->railway->upsertVariables($projectId, $environmentId, $vars, $serviceId);
+            if (!$success) {
+                return false;
+            }
+
+            foreach ($scopeMembers as $member) {
+                $name = (string)$member['secret_name'];
+                $oldValue = $currentVars[$name] ?? null;
+                if ($oldValue !== null) {
+                    $this->storage->updateLatestHistoryNewValue($name, $serviceId, $oldValue);
+                }
+                $this->storage->addHistory($name, $oldValue, $serviceId, $historyTrigger);
+            }
+        }
+
+        return true;
     }
 
     /**

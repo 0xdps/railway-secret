@@ -95,6 +95,20 @@ function normalizeUnit(?string $unit): string
     return in_array($unit, ['minute', 'hour', 'day'], true) ? $unit : 'day';
 }
 
+function normalizeSyncGroup(?string $syncGroup): ?string
+{
+    $syncGroup = trim((string)$syncGroup);
+    if ($syncGroup === '') {
+        return null;
+    }
+
+    if (!preg_match('/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/', $syncGroup)) {
+        throw new InvalidArgumentException('Sync group can contain letters, numbers, dot, dash, underscore (max 64 chars)');
+    }
+
+    return $syncGroup;
+}
+
 function cacheKeyServices(string $projectId): string
 {
     return 'services:' . $projectId;
@@ -628,6 +642,48 @@ if ($path === '/api/rotate' && $method === 'POST') {
     exit;
 }
 
+if ($path === '/api/rotate-sync-group' && $method === 'POST') {
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            throw new InvalidArgumentException('Invalid CSRF token');
+        }
+
+        $groupName = normalizeSyncGroup($_POST['groupName'] ?? null);
+        if ($groupName === null) {
+            throw new InvalidArgumentException('Sync group is required');
+        }
+
+        $members = $storage->getSyncGroupMembers($groupName);
+        if (empty($members)) {
+            throw new InvalidArgumentException('Sync group has no members');
+        }
+
+        $success = $rotator->rotateSyncGroup($groupName, $projectId, $environmentId, null, 'sync-manual');
+        if (!$success) {
+            sendApiJson(500, ['success' => false, 'error' => 'Sync group rotation failed']);
+            exit;
+        }
+
+        $scopeSeen = [];
+        foreach ($members as $member) {
+            $scope = (($member['service_id'] ?? '') !== '' ? (string)$member['service_id'] : '__global__');
+            if (isset($scopeSeen[$scope])) {
+                continue;
+            }
+            $scopeSeen[$scope] = true;
+            invalidateVariableCache($cache, $projectId, $environmentId, $scope === '__global__' ? null : $scope);
+        }
+
+        sendApiJson(200, ['success' => true, 'rotated' => count($members), 'group' => $groupName]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Rotate sync-group API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 if ($path === '/api/rotate-all-due' && $method === 'POST') {
     try {
         if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
@@ -636,16 +692,29 @@ if ($path === '/api/rotate-all-due' && $method === 'POST') {
 
         $managed    = $storage->getManagedSecrets();
         $dueSecrets = [];
+        $syncGroups = [];
 
         foreach ($managed as $config) {
             $interval = (int)($config['interval_days'] ?? 0);
+            $serviceId  = ($config['service_id'] ?? '') ?: null;
+            $syncGroup = trim((string)($config['sync_group'] ?? ''));
+
+            if ($syncGroup !== '') {
+                if (!isset($syncGroups[$syncGroup])) {
+                    $syncGroups[$syncGroup] = ['members' => [], 'due' => false];
+                }
+                $syncGroups[$syncGroup]['members'][] = array_merge($config, [
+                    'service_id' => $serviceId,
+                    'trigger_type' => 'auto',
+                ]);
+            }
+
             if ($interval === 0) {
                 continue;
             }
 
             $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
             $secret     = $config['secret_name'];
-            $serviceId  = $config['service_id'] ?: null;
 
             $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
             $isDue = $lastAutoTs === null ||
@@ -655,38 +724,75 @@ if ($path === '/api/rotate-all-due' && $method === 'POST') {
                 continue;
             }
 
-            $dueSecrets[] = array_merge($config, [
-                'service_id'   => $serviceId,
-                'trigger_type' => 'auto',
-            ]);
+            if ($syncGroup !== '') {
+                $syncGroups[$syncGroup]['due'] = true;
+            } else {
+                $dueSecrets[] = array_merge($config, [
+                    'service_id'   => $serviceId,
+                    'trigger_type' => 'auto',
+                ]);
+            }
         }
 
-        if (empty($dueSecrets)) {
+        $hasDueGroup = false;
+        foreach ($syncGroups as $group) {
+            if (!empty($group['due'])) {
+                $hasDueGroup = true;
+                break;
+            }
+        }
+
+        if (empty($dueSecrets) && !$hasDueGroup) {
             sendApiJson(200, ['success' => true, 'rotated' => 0, 'errors' => [], 'message' => 'No secrets are due for rotation']);
             exit;
         }
 
-        // Batch rotate: one Railway API call (one redeploy) per service scope
-        $results = $rotator->rotateBatch($dueSecrets, $projectId, $environmentId);
-
         $rotated = 0;
         $errors  = [];
 
-        foreach ($results as $name => $result) {
-            if ($result === 'success') {
-                // Invalidate variable cache for the scope this secret belongs to
-                $svcId = null;
-                foreach ($dueSecrets as $item) {
-                    if ($item['secret_name'] === $name) {
-                        $svcId = $item['service_id'] ?: null;
-                        break;
+        if (!empty($dueSecrets)) {
+            // Batch rotate: one Railway API call (one redeploy) per service scope
+            $results = $rotator->rotateBatch($dueSecrets, $projectId, $environmentId);
+            foreach ($results as $name => $result) {
+                if ($result === 'success') {
+                    // Invalidate variable cache for the scope this secret belongs to
+                    $svcId = null;
+                    foreach ($dueSecrets as $item) {
+                        if ($item['secret_name'] === $name) {
+                            $svcId = $item['service_id'] ?: null;
+                            break;
+                        }
                     }
+                    invalidateVariableCache($cache, $projectId, $environmentId, $svcId);
+                    $rotated++;
+                } else {
+                    $errors[] = $name;
+                    error_log('Rotate all due error for ' . $name . ': ' . $result);
                 }
-                invalidateVariableCache($cache, $projectId, $environmentId, $svcId);
+            }
+        }
+
+        foreach ($syncGroups as $groupName => $groupData) {
+            if (empty($groupData['due'])) {
+                continue;
+            }
+
+            $success = $rotator->rotateSyncGroup($groupName, $projectId, $environmentId, null, 'auto');
+            if (!$success) {
+                $errors[] = 'group:' . $groupName;
+                error_log('Rotate all due sync-group error for ' . $groupName);
+                continue;
+            }
+
+            $uniqueScopes = [];
+            foreach ($groupData['members'] as $member) {
+                $scope = (($member['service_id'] ?? '') !== '' ? (string)$member['service_id'] : '__global__');
+                $uniqueScopes[$scope] = ($scope === '__global__') ? null : $scope;
                 $rotated++;
-            } else {
-                $errors[] = $name;
-                error_log('Rotate all due error for ' . $name . ': ' . $result);
+            }
+
+            foreach ($uniqueScopes as $scopeServiceId) {
+                invalidateVariableCache($cache, $projectId, $environmentId, $scopeServiceId);
             }
         }
 
@@ -729,6 +835,71 @@ if ($path === '/api/secret-value' && $method === 'GET') {
     exit;
 }
 
+if ($path === '/api/sync-group-config' && $method === 'POST') {
+    try {
+        if (!$session->validateCsrfToken($_POST['csrf_token'] ?? null)) {
+            http_response_code(403);
+            echo 'Invalid CSRF token';
+            exit;
+        }
+
+        $groupName    = normalizeSyncGroup($_POST['group_name'] ?? null);
+        if ($groupName === null) {
+            throw new \InvalidArgumentException('Group name is required');
+        }
+
+        $length       = normalizeLength(isset($_POST['length']) ? (int)$_POST['length'] : null) ?? 32;
+        $encoding     = normalizeEncoding($_POST['encoding'] ?? null) ?? 'hex';
+        $interval     = max(0, (int)($_POST['interval'] ?? 0));
+        $intervalUnit = normalizeUnit($_POST['interval_unit'] ?? null);
+
+        $storage->saveSyncGroupConfig($groupName, [
+            'length'        => $length,
+            'encoding'      => $encoding,
+            'interval_days' => $interval,
+            'interval_unit' => $intervalUnit,
+        ]);
+
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => 'Group policy updated', 'type' => 'success']]));
+        sendApiJson(200, ['success' => true, 'group' => $groupName]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Sync group config API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
+if ($path === '/api/sync-group-config' && $method === 'DELETE') {
+    try {
+        $body = [];
+        parse_str(file_get_contents('php://input'), $body);
+
+        if (!$session->validateCsrfToken($body['csrf_token'] ?? null)) {
+            http_response_code(403);
+            echo 'Invalid CSRF token';
+            exit;
+        }
+
+        $groupName = normalizeSyncGroup($body['group_name'] ?? null);
+        if ($groupName === null) {
+            throw new \InvalidArgumentException('Group name is required');
+        }
+
+        $storage->deleteSyncGroup($groupName);
+
+        header('HX-Trigger: ' . json_encode(['rotatorToast' => ['message' => "Group \"{$groupName}\" deleted — members are now independent", 'type' => 'success']]));
+        sendApiJson(200, ['success' => true, 'group' => $groupName]);
+    } catch (\InvalidArgumentException $e) {
+        sendApiJson(400, ['success' => false, 'error' => $e->getMessage()]);
+    } catch (\Exception $e) {
+        error_log('Delete sync group API error: ' . $e->getMessage());
+        sendApiJson(500, ['success' => false, 'error' => 'Internal server error']);
+    }
+    exit;
+}
+
 if ($path === '/api/config-form' && $method === 'GET') {
     $secretName = $_GET['name'] ?? '';
     $serviceId = ($_GET['serviceId'] ?? '') ?: null;
@@ -743,6 +914,8 @@ if ($path === '/api/config-form' && $method === 'GET') {
         $managed = $storage->getManagedSecrets();
         $keyId = ($serviceId ?: 'global') . ':' . $secretName;
         $config = $managed[$keyId] ?? null;
+        $syncGroups = $storage->getDistinctSyncGroups();
+        $syncGroupConfigs = $storage->getSyncGroupConfigMap();
         
         include __DIR__ . '/../src/Views/components/config-modal-form.php';
     } catch (\Exception $e) {
@@ -767,6 +940,29 @@ if ($path === '/api/rotate-form' && $method === 'GET') {
         $managed = $storage->getManagedSecrets();
         $keyId   = ($serviceId ?: 'global') . ':' . $secretName;
         $config  = $managed[$keyId] ?? null;
+        $syncGroupMembers = [];
+
+        $syncGroup = trim((string)($config['sync_group'] ?? ''));
+        if ($syncGroup !== '') {
+            $serviceNameMap = $storage->getServiceNameMapFromMetadata();
+            foreach ($storage->getSyncGroupMembers($syncGroup) as $member) {
+                $memberName = (string)($member['secret_name'] ?? '');
+                $memberServiceId = (($member['service_id'] ?? '') !== '' ? (string)$member['service_id'] : null);
+                $sameAsCurrent = $memberName === $secretName && (string)($memberServiceId ?? '') === (string)($serviceId ?? '');
+                if ($sameAsCurrent) {
+                    continue;
+                }
+
+                $serviceLabel = $memberServiceId === null
+                    ? 'Global'
+                    : ($serviceNameMap[$memberServiceId] ?? $memberServiceId);
+
+                $syncGroupMembers[] = [
+                    'secret_name' => $memberName,
+                    'service' => $serviceLabel,
+                ];
+            }
+        }
 
         include __DIR__ . '/../src/Views/components/rotate-modal-form.php';
     } catch (\Exception $e) {
@@ -801,13 +997,19 @@ if ($path === '/api/config' && $method === 'POST') {
 
         $length = normalizeLength(isset($_POST['length']) ? (int)$_POST['length'] : null);
         $encoding = normalizeEncoding($_POST['encoding'] ?? null);
+        $syncGroup = normalizeSyncGroup($_POST['sync_group'] ?? null);
         $interval = max(0, (int)($_POST['interval'] ?? 0));
         $intervalUnit = normalizeUnit($_POST['interval_unit'] ?? null);
 
+        // When joining an existing sync group the group's canonical policy is the
+        // source of truth — submitted policy fields are ignored server-side.
+        // saveConfig() handles this internally via getSyncGroupConfig().
+
         if ($mode === 'save_only' || $mode === 'save_and_rotate') {
             $storage->saveConfig($name, $serviceId, [
-                'length' => $length ?? 32,
-                'encoding' => $encoding ?? 'hex',
+                'length'        => $length ?? 32,
+                'encoding'      => $encoding ?? 'hex',
+                'sync_group'    => $syncGroup,
                 'interval_days' => $interval,
                 'interval_unit' => $intervalUnit,
             ]);

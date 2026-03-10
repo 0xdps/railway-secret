@@ -57,7 +57,8 @@ echo "Starting scheduled rotations (" . date('Y-m-d H:i:s') . ")...\n";
 echo str_repeat('-', 60) . "\n";
 
 // Pass 1 — determine which secrets are due for rotation
-$dueSecrets = [];
+$dueSecrets  = [];   // standalone (no sync group)
+$dueSyncGroups = []; // sync group name => true (deduplicated)
 
 foreach ($managed as $key => $config) {
     $interval   = (int)($config['interval_days'] ?? 0);
@@ -65,6 +66,7 @@ foreach ($managed as $key => $config) {
     $secret     = $config['secret_name'];
     $serviceId  = $config['service_id'] ?: null;
     $scopeLabel = $serviceId ? "service:{$serviceId}" : 'global';
+    $syncGroup  = trim((string)($config['sync_group'] ?? ''));
 
     // Skip secrets configured for manual-only rotation
     if ($interval === 0) {
@@ -92,12 +94,17 @@ foreach ($managed as $key => $config) {
     }
 
     if ($isDue) {
-        $dueSecrets[] = array_merge($config, [
-            'service_id'   => $serviceId,
-            'trigger_type' => 'auto',
-            '_reason'      => $reason,
-            '_scope'       => $scopeLabel,
-        ]);
+        if ($syncGroup !== '') {
+            // Track at the group level — all members share one rotation call
+            $dueSyncGroups[$syncGroup] = true;
+        } else {
+            $dueSecrets[] = array_merge($config, [
+                'service_id'   => $serviceId,
+                'trigger_type' => 'auto',
+                '_reason'      => $reason,
+                '_scope'       => $scopeLabel,
+            ]);
+        }
     } else {
         echo "  SKIP   {$secret} ({$scopeLabel}) — {$reason}\n";
     }
@@ -105,13 +112,13 @@ foreach ($managed as $key => $config) {
 
 echo str_repeat('-', 60) . "\n";
 
-if (empty($dueSecrets)) {
+if (empty($dueSecrets) && empty($dueSyncGroups)) {
     echo "No secrets are due for rotation.\n";
     echo "Done.\n";
     exit(0);
 }
 
-// Show what will be rotated, grouped by scope
+// Show what will be rotated, grouped by scope (standalone) and by group (sync)
 $grouped = [];
 foreach ($dueSecrets as $item) {
     $grouped[$item['_scope']][] = $item['secret_name'];
@@ -124,10 +131,15 @@ foreach ($grouped as $scope => $names) {
         echo "         • {$name}\n";
     }
 }
+foreach (array_keys($dueSyncGroups) as $groupName) {
+    echo "  QUEUED sync-group [{$groupName}] — 1 shared value for all members\n";
+}
 echo str_repeat('-', 60) . "\n";
 
-// Pass 2 — batch rotate: one Railway API call (one redeploy) per service scope
-$results = $rotator->rotateBatch($dueSecrets, $projectId, $environmentId);
+// Pass 2a — rotate standalone secrets (one Railway call per scope)
+$results = !empty($dueSecrets)
+    ? $rotator->rotateBatch($dueSecrets, $projectId, $environmentId)
+    : [];
 
 $totalOk  = 0;
 $totalErr = 0;
@@ -138,6 +150,24 @@ foreach ($results as $name => $result) {
         $totalOk++;
     } else {
         echo "  ERROR  {$name}: {$result}\n";
+        $totalErr++;
+    }
+}
+
+// Pass 2b — rotate each due sync group with a single shared value
+foreach (array_keys($dueSyncGroups) as $groupName) {
+    try {
+        $ok = $rotator->rotateSyncGroup($groupName, $projectId, $environmentId, null, 'sync-auto');
+        if ($ok) {
+            $members = $storage->getSyncGroupMembers($groupName);
+            echo "  OK     sync-group [{$groupName}] (" . count($members) . " members)\n";
+            $totalOk += count($members);
+        } else {
+            echo "  ERROR  sync-group [{$groupName}]: rotation returned false\n";
+            $totalErr++;
+        }
+    } catch (\Throwable $e) {
+        echo "  ERROR  sync-group [{$groupName}]: " . $e->getMessage() . "\n";
         $totalErr++;
     }
 }

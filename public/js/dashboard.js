@@ -7,6 +7,8 @@ function escapeHtml(str) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const STORAGE_KEY_SHOW_RAILWAY = 'railwaySecrets.showRailwayVars';
+    let activeCustomSelect = null;
     const configModal = document.getElementById('configModal');
     const historyModal = document.getElementById('historyModal');
     const groupModal = document.getElementById('groupModal');
@@ -87,6 +89,150 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = (row.dataset.keyName || '').toLowerCase();
             const matchesSearch = query === '' || name.includes(query);
             row.style.display = matchesSearch ? '' : 'none';
+        });
+    }
+
+    function initRailwayToggleState() {
+        const toggleRailway = document.getElementById('toggleRailway');
+        if (!toggleRailway) {
+            return;
+        }
+
+        let saved = null;
+        try {
+            saved = window.localStorage.getItem(STORAGE_KEY_SHOW_RAILWAY);
+        } catch {
+            saved = null;
+        }
+
+        // Default is hidden for Railway_* keys.
+        toggleRailway.checked = saved === null ? false : saved === '1';
+    }
+
+    function applyManagedGroupFilter() {
+        const filterEl = document.getElementById('managedGroupFilter');
+        if (!filterEl) {
+            return;
+        }
+
+        const value = filterEl.value || '';
+        document.querySelectorAll('.managed-row').forEach((row) => {
+            const rowGroup = row.dataset.syncGroup || '__none__';
+            const visible = value === '' || rowGroup === value;
+            row.style.display = visible ? '' : 'none';
+        });
+    }
+
+    function closeCustomSelect(selectRoot = null) {
+        const target = selectRoot || activeCustomSelect;
+        if (!target) {
+            return;
+        }
+        target.classList.remove('open');
+        target.setAttribute('aria-expanded', 'false');
+        if (activeCustomSelect === target) {
+            activeCustomSelect = null;
+        }
+    }
+
+    function closeAllCustomSelects() {
+        document.querySelectorAll('.custom-select.open').forEach((el) => closeCustomSelect(el));
+    }
+
+    function initCustomSelects(root = document) {
+        const selects = root.querySelectorAll('select');
+        selects.forEach((selectEl) => {
+            if (selectEl.dataset.customSelectReady === '1') {
+                return;
+            }
+
+            selectEl.dataset.customSelectReady = '1';
+            selectEl.classList.add('custom-select-source');
+
+            const custom = document.createElement('div');
+            custom.className = 'custom-select';
+            custom.setAttribute('tabindex', '-1');
+            custom.setAttribute('aria-expanded', 'false');
+
+            if (selectEl.classList.contains('form-control-compact')) {
+                custom.classList.add('custom-select-compact');
+            }
+
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'custom-select-trigger';
+            trigger.setAttribute('aria-haspopup', 'listbox');
+
+            const label = document.createElement('span');
+            const caret = document.createElement('span');
+            caret.className = 'custom-select-caret';
+            trigger.appendChild(label);
+            trigger.appendChild(caret);
+
+            const menu = document.createElement('div');
+            menu.className = 'custom-select-menu';
+            menu.setAttribute('role', 'listbox');
+
+            const syncFromSelect = () => {
+                const selected = selectEl.options[selectEl.selectedIndex];
+                label.textContent = selected ? selected.textContent || '' : '';
+                menu.querySelectorAll('.custom-select-option').forEach((btn) => {
+                    btn.classList.toggle('active', btn.dataset.value === selectEl.value);
+                });
+            };
+
+            Array.from(selectEl.options).forEach((option) => {
+                const optBtn = document.createElement('button');
+                optBtn.type = 'button';
+                optBtn.className = 'custom-select-option';
+                optBtn.textContent = option.textContent || '';
+                optBtn.dataset.value = option.value;
+                if (option.disabled) {
+                    optBtn.disabled = true;
+                }
+
+                optBtn.addEventListener('click', () => {
+                    if (option.disabled) {
+                        return;
+                    }
+                    selectEl.value = option.value;
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    syncFromSelect();
+                    closeCustomSelect(custom);
+                });
+
+                menu.appendChild(optBtn);
+            });
+
+            trigger.addEventListener('click', () => {
+                const willOpen = !custom.classList.contains('open');
+                closeAllCustomSelects();
+                if (!willOpen) {
+                    return;
+                }
+                custom.classList.add('open');
+                custom.setAttribute('aria-expanded', 'true');
+                activeCustomSelect = custom;
+            });
+
+            trigger.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    closeCustomSelect(custom);
+                    return;
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    trigger.click();
+                }
+            });
+
+            selectEl.addEventListener('change', syncFromSelect);
+
+            custom.appendChild(trigger);
+            custom.appendChild(menu);
+            selectEl.insertAdjacentElement('afterend', custom);
+            syncFromSelect();
         });
     }
 
@@ -231,7 +377,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (triggerEl) {
             const isAuto = triggerType === 'auto';
-            triggerEl.innerHTML = `<span class="history-trigger-badge ${isAuto ? 'trigger-auto' : 'trigger-manual'}">${isAuto ? 'Automatic (cron)' : 'Manual'}</span>`;
+            const isRollback = triggerType === 'rollback';
+            const isSync = triggerType === 'sync-manual' || triggerType === 'sync-auto';
+            const badgeClass = isAuto
+                ? 'trigger-auto'
+                : (isRollback ? 'trigger-rollback' : (isSync ? 'trigger-sync' : 'trigger-manual'));
+            const label = isAuto
+                ? 'Automatic (cron)'
+                : (isRollback ? 'Rollback' : (triggerType === 'sync-auto' ? 'Sync Group (auto)' : (isSync ? 'Sync Group' : 'Manual')));
+            triggerEl.innerHTML = `<span class="history-trigger-badge ${badgeClass}">${label}</span>`;
         }
 
         if (oldValueEl) {
@@ -393,7 +547,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     refreshIcons();
+    initCustomSelects();
+    initRailwayToggleState();
     applyFilters();
+    applyManagedGroupFilter();
     applyRelativeTimes();
     updateSidebarActive();
     updateDocumentTitle();
@@ -402,13 +559,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.body.addEventListener('change', (event) => {
         if (event.target && event.target.id === 'toggleRailway') {
+            try {
+                window.localStorage.setItem(STORAGE_KEY_SHOW_RAILWAY, event.target.checked ? '1' : '0');
+            } catch {
+                // Ignore storage write failures in privacy mode.
+            }
             applyFilters();
+            return;
+        }
+
+        if (event.target && event.target.id === 'managedGroupFilter') {
+            applyManagedGroupFilter();
         }
     });
 
     document.body.addEventListener('input', (event) => {
         if (event.target && event.target.id === 'secretSearch') {
             applyFilters();
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.custom-select')) {
+            closeAllCustomSelects();
         }
     });
 
@@ -447,7 +620,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // HTMX lifecycle hooks for dynamic fragments.
     document.body.addEventListener('htmx:afterSwap', () => {
         refreshIcons();
+        initCustomSelects();
+        initRailwayToggleState();
         applyFilters();
+        applyManagedGroupFilter();
         applyRelativeTimes();
         updateSidebarActive();
         updateDocumentTitle();
@@ -456,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.body.addEventListener('htmx:afterSettle', () => {
         refreshIcons();
+        initCustomSelects();
         applyRelativeTimes();
     });
 
@@ -533,6 +710,53 @@ document.addEventListener('DOMContentLoaded', () => {
                     rotateDueBtn.innerHTML = originalHtml;
                     refreshIcons();
                 });
+            return;
+        }
+
+        const rotateSyncGroupBtn = event.target.closest('.js-rotate-sync-group');
+        if (rotateSyncGroupBtn) {
+            const groupName = rotateSyncGroupBtn.dataset.syncGroup || '';
+            if (!groupName) {
+                showToast('Missing sync group', 'error');
+                return;
+            }
+
+            window.confirmDialog(
+                'Rotate sync group',
+                `Rotate every secret linked to <strong>${groupName}</strong> to one shared value? This triggers redeploys for affected services.`,
+                async () => {
+                    rotateSyncGroupBtn.disabled = true;
+                    try {
+                        const fd = new FormData();
+                        fd.append('groupName', groupName);
+                        fd.append('csrf_token', csrfToken);
+                        const response = await fetch('/api/rotate-sync-group', { method: 'POST', body: fd });
+                        const payload = await response.json();
+                        if (!response.ok || !payload.success) {
+                            showToast(payload.error || 'Sync group rotation failed', 'error');
+                            return;
+                        }
+
+                        showToast(`${groupName} rotated (${payload.rotated || 0} secrets)`, 'success');
+                        const mc = document.getElementById('mainContent');
+                        if (mc) {
+                            fetch('/managed', { headers: { 'HX-Request': 'true' } })
+                                .then(r => r.text())
+                                .then(html => {
+                                    mc.outerHTML = html;
+                                    refreshIcons();
+                                    applyRelativeTimes();
+                                    updateSidebarActive();
+                                })
+                                .catch(() => {});
+                        }
+                    } catch {
+                        showToast('Sync group rotation failed', 'error');
+                    } finally {
+                        rotateSyncGroupBtn.disabled = false;
+                    }
+                }
+            );
             return;
         }
 
@@ -1062,15 +1286,198 @@ document.addEventListener('DOMContentLoaded', () => {
         const toggle   = document.getElementById('scheduleToggle');
         const fields   = document.getElementById('scheduleFields');
         const fallback = document.getElementById('intervalFallback');
+        const syncGroupSelect = document.getElementById('syncGroupSelect');
+        const syncGroupHidden = document.getElementById('syncGroupHidden');
+        const syncGroupNewWrap = document.getElementById('syncGroupNewWrap');
+        const syncGroupNewInput = document.getElementById('syncGroupNewInput');
+        const syncGroupConfigsData = document.getElementById('syncGroupConfigsData');
+        const lengthSelect = document.querySelector('select[name="length"]');
+        const encodingSelect = document.querySelector('select[name="encoding"]');
+        const intervalInput = document.querySelector('input[name="interval"]');
+        const intervalUnitSelect = document.querySelector('select[name="interval_unit"]');
+
+        let syncGroupConfigs = {};
+        if (syncGroupConfigsData && syncGroupConfigsData.value) {
+            try {
+                syncGroupConfigs = JSON.parse(syncGroupConfigsData.value) || {};
+            } catch {
+                syncGroupConfigs = {};
+            }
+        }
+
+        let applyScheduleToggle = null;
 
         if (toggle && fields && fallback) {
-            function applyScheduleToggle() {
+            applyScheduleToggle = function () {
                 const on = toggle.checked;
                 fields.style.display = on ? '' : 'none';
                 fallback.disabled    = on;
-            }
+            };
             applyScheduleToggle();
             toggle.addEventListener('change', applyScheduleToggle);
+        }
+
+        if (syncGroupSelect && syncGroupHidden) {
+            const editGroupPolicyToggleBtn = document.getElementById('editGroupPolicyToggle');
+            const editGroupPolicySection   = document.getElementById('editGroupPolicySection');
+            const editGroupPolicyClose     = document.getElementById('editGroupPolicyClose');
+            const editGroupPolicyForm      = document.getElementById('editGroupPolicyForm');
+            const syncGroupLockedNotice    = document.getElementById('syncGroupLockedNotice');
+            const editGroupPolicyName      = document.getElementById('editGroupPolicyName');
+            const editPolicyLength         = document.getElementById('editPolicyLength');
+            const editPolicyEncoding       = document.getElementById('editPolicyEncoding');
+            const editPolicyInterval       = document.getElementById('editPolicyInterval');
+            const editPolicyUnit           = document.getElementById('editPolicyUnit');
+
+            /** Lock or unlock the generation + schedule fields based on group state */
+            const setGroupPolicyLock = (lock) => {
+                document.querySelectorAll('[data-policy-field]').forEach(el => {
+                    el.disabled = lock;
+                });
+                if (syncGroupLockedNotice) syncGroupLockedNotice.style.display = lock ? '' : 'none';
+                if (!lock && editGroupPolicySection) editGroupPolicySection.style.display = 'none';
+            };
+
+            const applyGroupPreset = (groupName) => {
+                const preset = syncGroupConfigs[groupName];
+                if (!preset) {
+                    return;
+                }
+
+                if (lengthSelect && preset.length) {
+                    lengthSelect.value = String(preset.length);
+                    lengthSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                if (encodingSelect && preset.encoding) {
+                    encodingSelect.value = String(preset.encoding);
+                    encodingSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                const intervalDays = Number.parseInt(String(preset.interval_days ?? 0), 10) || 0;
+                if (intervalInput) {
+                    intervalInput.value = intervalDays > 0 ? String(intervalDays) : '1';
+                }
+
+                if (intervalUnitSelect && preset.interval_unit) {
+                    intervalUnitSelect.value = String(preset.interval_unit);
+                    intervalUnitSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                if (toggle && typeof applyScheduleToggle === 'function') {
+                    toggle.checked = intervalDays > 0;
+                    applyScheduleToggle();
+                }
+
+                // Lock + pre-fill the edit-policy form
+                setGroupPolicyLock(true);
+                if (editGroupPolicyName) editGroupPolicyName.value = groupName;
+                if (editPolicyLength  && preset.length)        editPolicyLength.value   = String(preset.length);
+                if (editPolicyEncoding && preset.encoding)     editPolicyEncoding.value = String(preset.encoding);
+                if (editPolicyInterval)                        editPolicyInterval.value = String(intervalDays);
+                if (editPolicyUnit && preset.interval_unit)    editPolicyUnit.value     = String(preset.interval_unit);
+            };
+
+            const applySyncGroupSelect = () => {
+                const selected = syncGroupSelect.value || '';
+                if (selected === '__new__') {
+                    if (syncGroupNewWrap) {
+                        syncGroupNewWrap.style.display = '';
+                    }
+                    const newValue = syncGroupNewInput ? syncGroupNewInput.value.trim() : '';
+                    syncGroupHidden.value = newValue;
+                    setGroupPolicyLock(false);
+                } else {
+                    if (syncGroupNewWrap) {
+                        syncGroupNewWrap.style.display = 'none';
+                    }
+                    syncGroupHidden.value = selected;
+                    if (selected && syncGroupConfigs[selected]) {
+                        applyGroupPreset(selected);
+                    } else {
+                        setGroupPolicyLock(false);
+                    }
+                }
+            };
+
+            syncGroupSelect.addEventListener('change', applySyncGroupSelect);
+            if (syncGroupNewInput) {
+                syncGroupNewInput.addEventListener('input', applySyncGroupSelect);
+            }
+            applySyncGroupSelect();
+
+            // Edit policy toggle
+            if (editGroupPolicyToggleBtn && editGroupPolicySection) {
+                editGroupPolicyToggleBtn.addEventListener('click', () => {
+                    const isOpen = editGroupPolicySection.style.display !== 'none';
+                    editGroupPolicySection.style.display = isOpen ? 'none' : '';
+                });
+            }
+            if (editGroupPolicyClose && editGroupPolicySection) {
+                editGroupPolicyClose.addEventListener('click', () => {
+                    editGroupPolicySection.style.display = 'none';
+                });
+            }
+
+            // After a successful group policy save, update in-memory preset + re-lock fields
+            if (editGroupPolicyForm) {
+                editGroupPolicyForm.addEventListener('htmx:afterRequest', (ev) => {
+                    if (ev.detail.successful && editGroupPolicyName) {
+                        const gName = editGroupPolicyName.value;
+                        if (gName && syncGroupConfigs) {
+                            syncGroupConfigs[gName] = {
+                                length:        parseInt(editPolicyLength?.value  || '32', 10),
+                                encoding:      editPolicyEncoding?.value || 'hex',
+                                interval_days: parseInt(editPolicyInterval?.value || '0', 10),
+                                interval_unit: editPolicyUnit?.value || 'day',
+                            };
+                            applyGroupPreset(gName);
+                        }
+                        if (editGroupPolicySection) editGroupPolicySection.style.display = 'none';
+                    }
+                });
+            }
+
+            // Delete group button
+            const deleteGroupBtn = document.getElementById('deleteGroupPolicyBtn');
+            if (deleteGroupBtn) {
+                deleteGroupBtn.addEventListener('click', async () => {
+                    const gName = deleteGroupBtn.dataset.groupName || '';
+                    const csrf  = deleteGroupBtn.dataset.csrfToken || '';
+                    if (!gName) return;
+                    if (!confirm(`Delete sync group "${gName}"?\n\nAll members become independent secrets. No secrets are deleted from Railway.`)) {
+                        return;
+                    }
+                    deleteGroupBtn.disabled = true;
+                    try {
+                        const res = await fetch('/api/sync-group-config', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: new URLSearchParams({ group_name: gName, csrf_token: csrf }),
+                        });
+                        if (res.ok) {
+                            const triggerHeader = res.headers.get('HX-Trigger');
+                            if (triggerHeader) {
+                                try {
+                                    const ev = JSON.parse(triggerHeader);
+                                    if (ev.rotatorToast) {
+                                        document.dispatchEvent(new CustomEvent('rotatorToast', { detail: ev.rotatorToast }));
+                                    }
+                                } catch {}
+                            }
+                            // Close modal
+                            document.querySelector('.js-close-config-modal')?.click();
+                        } else {
+                            const data = await res.json().catch(() => ({}));
+                            alert('Error: ' + (data.error || res.status));
+                        }
+                    } catch (err) {
+                        alert('Network error: ' + err.message);
+                    } finally {
+                        deleteGroupBtn.disabled = false;
+                    }
+                });
+            }
         }
     }
 

@@ -52,6 +52,7 @@ class StorageService
             service_id TEXT,
             length INTEGER DEFAULT 32,
             encoding TEXT DEFAULT 'hex',
+            sync_group TEXT,
             interval_days INTEGER DEFAULT 30,
             interval_unit TEXT NOT NULL DEFAULT 'day',
             last_rotated DATETIME,
@@ -62,6 +63,10 @@ class StorageService
             $this->db->exec("ALTER TABLE managed_secrets ADD COLUMN interval_unit TEXT NOT NULL DEFAULT 'day'");
         }
 
+        if (!$this->tableHasColumn('managed_secrets', 'sync_group')) {
+            $this->db->exec("ALTER TABLE managed_secrets ADD COLUMN sync_group TEXT");
+        }
+
         $this->db->exec("CREATE INDEX IF NOT EXISTS idx_secret_history_lookup ON secret_history(secret_name, service_id, rotated_at DESC)");
 
         $this->db->exec("CREATE TABLE IF NOT EXISTS service_metadata (
@@ -70,6 +75,17 @@ class StorageService
             group_name TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
+
+        $this->db->exec("CREATE TABLE IF NOT EXISTS sync_groups (
+            name TEXT PRIMARY KEY,
+            length INTEGER NOT NULL DEFAULT 32,
+            encoding TEXT NOT NULL DEFAULT 'hex',
+            interval_days INTEGER NOT NULL DEFAULT 0,
+            interval_unit TEXT NOT NULL DEFAULT 'day',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        $this->migrateToSyncGroupsTable();
     }
 
     /**
@@ -116,6 +132,33 @@ class StorageService
         $this->db->exec("PRAGMA user_version = 1");
     }
 
+    /**
+     * Migration v2: populate the canonical sync_groups table from any pre-existing
+     * data in managed_secrets.  Uses user_version = 2 as the one-time flag.
+     */
+    private function migrateToSyncGroupsTable(): void
+    {
+        $version = (int)$this->db->querySingle("PRAGMA user_version");
+        if ($version >= 2) {
+            return;
+        }
+
+        // Deduplicate existing group configs into sync_groups
+        $this->db->exec("
+            INSERT OR IGNORE INTO sync_groups (name, length, encoding, interval_days, interval_unit)
+            SELECT sync_group,
+                   MIN(COALESCE(length, 32)),
+                   MIN(COALESCE(encoding, 'hex')),
+                   MIN(COALESCE(interval_days, 0)),
+                   MIN(COALESCE(interval_unit, 'day'))
+            FROM managed_secrets
+            WHERE sync_group IS NOT NULL AND TRIM(sync_group) != ''
+            GROUP BY sync_group
+        ");
+
+        $this->db->exec("PRAGMA user_version = 2");
+    }
+
     private function tableHasColumn(string $table, string $column): bool
     {
         $escapedTable = str_replace("'", "''", $table);
@@ -131,19 +174,185 @@ class StorageService
 
     public function saveConfig(string $name, ?string $serviceId, array $config): bool
     {
+        $syncGroup = isset($config['sync_group']) ? trim((string)$config['sync_group']) : '';
+
+        if ($syncGroup !== '') {
+            // Look up the canonical policy for this group
+            $groupPolicy = $this->getSyncGroupConfig($syncGroup);
+            if ($groupPolicy === null) {
+                // Brand-new group — publish it with the submitted policy
+                $this->saveSyncGroupConfig($syncGroup, $config);
+                $groupPolicy = $this->getSyncGroupConfig($syncGroup);
+            }
+            // Member row always mirrors the group policy (eliminates drift)
+            $config = array_merge($config, [
+                'length'        => $groupPolicy['length'],
+                'encoding'      => $groupPolicy['encoding'],
+                'interval_days' => $groupPolicy['interval_days'],
+                'interval_unit' => $groupPolicy['interval_unit'],
+            ]);
+        }
+
         $stmt = $this->db->prepare("
-            INSERT OR REPLACE INTO managed_secrets 
-            (secret_name, service_id, length, encoding, interval_days, interval_unit) 
-            VALUES (:name, :sid, :len, :enc, :int, :unit)
+            INSERT OR REPLACE INTO managed_secrets
+            (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit)
+            VALUES (:name, :sid, :len, :enc, :sync_group, :int, :unit)
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
-        $stmt->bindValue(':sid', $serviceId, SQLITE3_TEXT);
+        $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
         $stmt->bindValue(':len', $config['length'] ?? 32, SQLITE3_INTEGER);
         $stmt->bindValue(':enc', $config['encoding'] ?? 'hex', SQLITE3_TEXT);
+        $stmt->bindValue(':sync_group', $syncGroup !== '' ? $syncGroup : null, $syncGroup !== '' ? SQLITE3_TEXT : SQLITE3_NULL);
         $stmt->bindValue(':int', $config['interval_days'] ?? 0, SQLITE3_INTEGER);
         $stmt->bindValue(':unit', $config['interval_unit'] ?? 'day', SQLITE3_TEXT);
-        
+
         return (bool)$stmt->execute();
+    }
+
+    /**
+     * Fetch the canonical policy for a single sync group from the sync_groups table.
+     * Returns null if the group does not exist.
+     */
+    public function getSyncGroupConfig(string $name): ?array
+    {
+        $stmt = $this->db->prepare("SELECT name, length, encoding, interval_days, interval_unit FROM sync_groups WHERE name = :name LIMIT 1");
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $result = $stmt->execute();
+        $row = $result->fetchArray(SQLITE3_ASSOC);
+        if (!$row) {
+            return null;
+        }
+        return [
+            'length'        => (int)($row['length'] ?? 32),
+            'encoding'      => (string)($row['encoding'] ?? 'hex'),
+            'interval_days' => (int)($row['interval_days'] ?? 0),
+            'interval_unit' => (string)($row['interval_unit'] ?? 'day'),
+        ];
+    }
+
+    /**
+     * Upsert the policy for a sync group and bulk-update all member rows so they
+     * always mirror the canonical policy (no drift possible).
+     */
+    public function saveSyncGroupConfig(string $name, array $policy): bool
+    {
+        $length       = max(8, min(256, (int)($policy['length'] ?? 32)));
+        $encoding     = in_array($policy['encoding'] ?? 'hex', ['hex', 'base64', 'alphanumeric'], true) ? $policy['encoding'] : 'hex';
+        $intervalDays = max(0, (int)($policy['interval_days'] ?? 0));
+        $intervalUnit = in_array($policy['interval_unit'] ?? 'day', ['minute', 'hour', 'day'], true) ? $policy['interval_unit'] : 'day';
+
+        $stmt = $this->db->prepare("
+            INSERT OR REPLACE INTO sync_groups (name, length, encoding, interval_days, interval_unit)
+            VALUES (:name, :len, :enc, :int, :unit)
+        ");
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $stmt->bindValue(':len', $length, SQLITE3_INTEGER);
+        $stmt->bindValue(':enc', $encoding, SQLITE3_TEXT);
+        $stmt->bindValue(':int', $intervalDays, SQLITE3_INTEGER);
+        $stmt->bindValue(':unit', $intervalUnit, SQLITE3_TEXT);
+        if (!$stmt->execute()) {
+            return false;
+        }
+
+        // Propagate the new policy to every member of the group
+        $upd = $this->db->prepare("
+            UPDATE managed_secrets
+            SET length = :len, encoding = :enc, interval_days = :int, interval_unit = :unit
+            WHERE sync_group = :group
+        ");
+        $upd->bindValue(':len', $length, SQLITE3_INTEGER);
+        $upd->bindValue(':enc', $encoding, SQLITE3_TEXT);
+        $upd->bindValue(':int', $intervalDays, SQLITE3_INTEGER);
+        $upd->bindValue(':unit', $intervalUnit, SQLITE3_TEXT);
+        $upd->bindValue(':group', $name, SQLITE3_TEXT);
+        $upd->execute();
+
+        return true;
+    }
+
+    /**
+     * Delete a sync group entry and unlink all its member secrets.
+     * Member rows are kept but their sync_group column is set to NULL so they
+     * become independently-managed secrets.
+     */
+    public function deleteSyncGroup(string $name): bool
+    {
+        $this->db->exec('BEGIN');
+
+        $unlink = $this->db->prepare("UPDATE managed_secrets SET sync_group = NULL WHERE sync_group = :name");
+        $unlink->bindValue(':name', $name, SQLITE3_TEXT);
+        $unlink->execute();
+
+        $del = $this->db->prepare("DELETE FROM sync_groups WHERE name = :name");
+        $del->bindValue(':name', $name, SQLITE3_TEXT);
+        $del->execute();
+
+        $this->db->exec('COMMIT');
+        return true;
+    }
+
+    public function getSyncGroupMembers(string $groupName): array
+    {
+        $groupName = trim($groupName);
+        if ($groupName === '') {
+            return [];
+        }
+
+        $stmt = $this->db->prepare("SELECT * FROM managed_secrets WHERE sync_group = :group_name ORDER BY service_id, secret_name");
+        $stmt->bindValue(':group_name', $groupName, SQLITE3_TEXT);
+        $result = $stmt->execute();
+
+        $rows = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    public function getDistinctSyncGroups(): array
+    {
+        // Read from the canonical sync_groups table
+        $result = $this->db->query("SELECT name FROM sync_groups ORDER BY name ASC");
+        $groups = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $groups[] = (string)($row['name'] ?? '');
+        }
+        return $groups;
+    }
+
+    public function getSyncGroupConfigMap(): array
+    {
+        // Read directly from the canonical sync_groups table (single source of truth)
+        $result = $this->db->query("SELECT name, length, encoding, interval_days, interval_unit FROM sync_groups ORDER BY name ASC");
+        $map = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $group = trim((string)($row['name'] ?? ''));
+            if ($group === '') {
+                continue;
+            }
+            $map[$group] = [
+                'length'        => (int)($row['length'] ?? 32),
+                'encoding'      => (string)($row['encoding'] ?? 'hex'),
+                'interval_days' => (int)($row['interval_days'] ?? 0),
+                'interval_unit' => (string)($row['interval_unit'] ?? 'day'),
+            ];
+        }
+        return $map;
+    }
+
+    public function getServiceNameMapFromMetadata(): array
+    {
+        $result = $this->db->query("SELECT service_id, service_name FROM service_metadata");
+        $map = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $id = (string)($row['service_id'] ?? '');
+            $name = (string)($row['service_name'] ?? '');
+            if ($id !== '' && $name !== '') {
+                $map[$id] = $name;
+            }
+        }
+        return $map;
     }
 
     public function getManagedSecrets(): array
@@ -408,7 +617,7 @@ class StorageService
     public function getAllManagedWithServiceNames(): array
     {
         $result = $this->db->query("
-            SELECT ms.secret_name, ms.service_id, ms.length, ms.encoding,
+                 SELECT ms.secret_name, ms.service_id, ms.length, ms.encoding, ms.sync_group,
                    ms.interval_days, ms.interval_unit,
                    COALESCE(sm.service_name, 'Global') AS service_name,
                    (SELECT rotated_at FROM secret_history

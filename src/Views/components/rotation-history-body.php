@@ -10,7 +10,7 @@
 <?php if (empty($recentHistory)): ?>
     <tr>
         <td colspan="3">
-            <div class="empty-state" style="padding: 24px 20px;">
+            <div class="empty-state">
                 <i data-lucide="history" style="width:24px;height:24px;"></i>
                 <p>No rotation history yet.</p>
             </div>
@@ -29,8 +29,9 @@
         $triggerType = (string)($item['trigger_type'] ?? 'manual');
         $isAuto     = $triggerType === 'auto';
         $isRollback = $triggerType === 'rollback';
-        $badgeClass = $isAuto ? 'trigger-auto' : ($isRollback ? 'trigger-rollback' : 'trigger-manual');
-        $badgeLabel = $isAuto ? 'auto' : ($isRollback ? 'rollback' : 'manual');
+        $isSync     = $triggerType === 'sync-manual' || $triggerType === 'sync-auto';
+        $badgeClass = $isAuto ? 'trigger-auto' : ($isRollback ? 'trigger-rollback' : ($isSync ? 'trigger-sync' : 'trigger-manual'));
+        $badgeLabel = $isAuto ? 'auto' : ($isRollback ? 'rollback' : ($triggerType === 'sync-auto' ? 'sync-auto' : ($isSync ? 'sync' : 'manual')));
         ?>
         <tr class="history-row js-history-row" data-history-id="<?= (int)$historyId ?>">
             <td>

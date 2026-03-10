@@ -14,7 +14,7 @@ if (empty($variables)):
     <tr>
         <td colspan="3">
             <div class="empty-state">
-                <i data-lucide="ghost" style="width:32px;height:32px;"></i>
+                <i data-lucide="ghost" style="width:24px;height:24px;"></i>
                 <p>No variables found in this scope.</p>
             </div>
         </td>

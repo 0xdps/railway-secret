@@ -7,6 +7,17 @@ class CryptoService
     private const CIPHER = 'aes-256-gcm';
 
     /**
+     * Derive a proper 32-byte AES-256 key from the master key string.
+     * openssl_encrypt silently truncates / zero-pads keys that are not exactly
+     * 32 bytes, reducing effective entropy when the master key length is not 32.
+     * Using SHA-256 always produces a proper 256-bit key regardless of input length.
+     */
+    private static function deriveKey(string $key): string
+    {
+        return hash('sha256', $key, true);
+    }
+
+    /**
      * Encrypt data using the Master Key
      */
     public static function encrypt(string $data, string $key): string
@@ -15,15 +26,16 @@ class CryptoService
             throw new \InvalidArgumentException('Encryption key cannot be empty');
         }
 
+        $derivedKey = self::deriveKey($key);
         $ivlen = openssl_cipher_iv_length(self::CIPHER);
         $iv = random_bytes($ivlen);
 
         $tag = '';
-        $ciphertext = openssl_encrypt($data, self::CIPHER, $key, $options = 0, $iv, $tag);
+        $ciphertext = openssl_encrypt($data, self::CIPHER, $derivedKey, OPENSSL_RAW_DATA, $iv, $tag);
         if ($ciphertext === false) {
             throw new \RuntimeException('Encryption failed');
         }
-        
+
         return base64_encode($iv . $tag . $ciphertext);
     }
 
@@ -46,11 +58,12 @@ class CryptoService
             return null;
         }
 
-        $iv = substr($decoded, 0, $ivlen);
-        $tag = substr($decoded, $ivlen, 16);
+        $iv         = substr($decoded, 0, $ivlen);
+        $tag        = substr($decoded, $ivlen, 16);
         $ciphertext = substr($decoded, $ivlen + 16);
+        $derivedKey = self::deriveKey($key);
 
-        $decrypted = openssl_decrypt($ciphertext, self::CIPHER, $key, $options = 0, $iv, $tag);
+        $decrypted = openssl_decrypt($ciphertext, self::CIPHER, $derivedKey, OPENSSL_RAW_DATA, $iv, $tag);
         return $decrypted === false ? null : $decrypted;
     }
 

@@ -48,6 +48,18 @@
             </button>
             <span class="cache-status-text" id="cacheStatusText">Cache: --</span>
         </div>
+        <?php elseif ($currentSection === 'history'): ?>
+        <div class="flex items-center gap-6">
+            <button class="btn btn-ghost btn-sm"
+                    type="button"
+                    hx-get="/api/rotation-history?serviceId=<?= urlencode((string)($serviceId ?? '')) ?>"
+                    hx-target="#rotation-history-body"
+                    hx-swap="innerHTML"
+                    hx-indicator="#historyRefreshIndicator">
+                <i data-lucide="refresh-cw" id="historyRefreshIndicator" class="refresh-indicator" style="width:13px;height:13px;"></i>
+                Refresh
+            </button>
+        </div>
         <?php endif; ?>
     </div>
 
@@ -150,22 +162,7 @@
             </table>
         </div>
         <?php else: ?>
-        <div class="panel history-panel">
-            <div class="history-header">
-                <div>
-                    <h3>Rotation History</h3>
-                    <p>Complete audit trail. Click <strong>Inspect</strong> to view old &amp; new values.</p>
-                </div>
-                <button class="btn btn-ghost btn-sm"
-                        type="button"
-                        hx-get="/api/rotation-history?serviceId=<?= urlencode((string)$serviceId) ?>"
-                        hx-target="#rotation-history-body"
-                        hx-swap="innerHTML"
-                        hx-indicator="#historyRefreshIndicator">
-                    <i data-lucide="refresh-cw" id="historyRefreshIndicator" class="refresh-indicator" style="width:13px;height:13px;"></i>
-                    Refresh
-                </button>
-            </div>
+        <div class="panel">
             <table class="data-table history-table">
                 <colgroup>
                     <col style="width: 52%;">

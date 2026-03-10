@@ -23,6 +23,16 @@ foreach ($allManaged as $row) {
         }
     }
 }
+
+$syncGroupOptions = [];
+foreach ($allManaged as $row) {
+    $group = trim((string)($row['sync_group'] ?? ''));
+    if ($group !== '') {
+        $syncGroupOptions[$group] = true;
+    }
+}
+$syncGroupOptions = array_keys($syncGroupOptions);
+sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
 ?>
 <div id="mainContent" class="main-content"
      data-service-id=""
@@ -36,24 +46,28 @@ foreach ($allManaged as $row) {
             <h1><?= htmlspecialchars($viewTitle) ?></h1>
             <p>All rotation-configured secrets across every scope. <?= count($allManaged) ?> managed<?= $dueCount > 0 ? ', <strong>' . $dueCount . ' overdue</strong>' : '' ?>.</p>
         </div>
-        <?php if ($dueCount > 0): ?>
         <div class="flex items-center gap-6">
+            <?php if (!empty($syncGroupOptions)): ?>
+            <label class="form-hint" for="managedGroupFilter" style="margin:0;color:var(--text-muted);">Group</label>
+            <select id="managedGroupFilter" class="form-control form-control-compact" style="min-width:180px;">
+                <option value="">All groups</option>
+                <option value="__none__">No group</option>
+                <?php foreach ($syncGroupOptions as $group): ?>
+                    <option value="<?= htmlspecialchars($group, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($group) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <?php endif; ?>
+            <?php if ($dueCount > 0): ?>
             <button class="btn btn-primary btn-sm" type="button" id="rotateDueBtn">
                 <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
                 Rotate Due (<?= $dueCount ?>)
             </button>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
     </div>
 
     <!-- Page Body -->
     <div class="page-body">
-        <?php if (empty($allManaged)): ?>
-        <div class="empty-state" style="padding: 60px 0;">
-            <i data-lucide="shield-off" style="width:36px;height:36px;"></i>
-            <p>No managed secrets yet. Open a service, click the ⚙ icon on any variable, and save a rotation config.</p>
-        </div>
-        <?php else: ?>
         <div class="panel">
             <table class="data-table">
                 <colgroup>
@@ -73,6 +87,16 @@ foreach ($allManaged as $row) {
                     </tr>
                 </thead>
                 <tbody>
+                <?php if (empty($allManaged)): ?>
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                <i data-lucide="shield-off" style="width:24px;height:24px;"></i>
+                                <p>No managed secrets yet. Open a service, click the ⚙ icon on any variable, and save a rotation config.</p>
+                            </div>
+                        </td>
+                    </tr>
+                <?php else: ?>
                 <?php foreach ($allManaged as $row):
                     $interval     = (int)($row['interval_days'] ?? 0);
                     $unitSuffix   = ['minute' => 'm', 'hour' => 'h', 'day' => 'd'][$row['interval_unit'] ?? 'day'] ?? 'd';
@@ -89,8 +113,9 @@ foreach ($allManaged as $row) {
                             }
                         }
                     }
+                    $syncGroupValue = trim((string)($row['sync_group'] ?? ''));
                 ?>
-                    <tr>
+                    <tr class="managed-row" data-sync-group="<?= htmlspecialchars($syncGroupValue !== '' ? $syncGroupValue : '__none__', ENT_QUOTES, 'UTF-8') ?>">
                         <td>
                             <div class="key-name">
                                 <i data-lucide="shield-check" class="key-icon managed" style="width:13px;height:13px;"></i>
@@ -98,10 +123,16 @@ foreach ($allManaged as $row) {
                             </div>
                             <div style="margin-top:3px;">
                                 <span class="badge badge-manual"><?= htmlspecialchars($row['service_name']) ?></span>
+                                <?php if (!empty($row['sync_group'])): ?>
+                                    <span class="badge badge-schedule" style="margin-left:4px;">
+                                        <i data-lucide="link-2" style="width:10px;height:10px;"></i>
+                                        <?= htmlspecialchars((string)$row['sync_group']) ?>
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </td>
                         <td>
-                            <span class="config-text"><?= (int)$row['length'] ?> · <?= htmlspecialchars($row['encoding']) ?></span>
+                            <span class="config-text"><?= (int)$row['length'] ?> chars · <?= htmlspecialchars($row['encoding']) ?></span>
                             <?php if (!$isManualOnly): ?>
                             <div style="margin-top:3px;">
                                 <span class="badge badge-schedule">
@@ -139,6 +170,14 @@ foreach ($allManaged as $row) {
                         </td>
                         <td>
                             <div class="actions-cell">
+                                <?php if (!empty($row['sync_group'])): ?>
+                                <button class="btn-icon js-rotate-sync-group"
+                                        type="button"
+                                        title="Rotate sync group"
+                                        data-sync-group="<?= htmlspecialchars((string)$row['sync_group'], ENT_QUOTES, 'UTF-8') ?>">
+                                    <i data-lucide="link-2" style="width:13px;height:13px;"></i>
+                                </button>
+                                <?php endif; ?>
                                 <button class="btn-icon js-open-config-modal"
                                         type="button"
                                         title="Rotate now"
@@ -159,9 +198,9 @@ foreach ($allManaged as $row) {
                         </td>
                     </tr>
                 <?php endforeach; ?>
+                <?php endif; ?>
                 </tbody>
             </table>
         </div>
-        <?php endif; ?>
     </div>
 </div>

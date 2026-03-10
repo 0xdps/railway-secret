@@ -12,7 +12,7 @@
         </div>
     </div>
 
-    <div class="page-body" style="padding-bottom: 60vh;">
+    <div class="page-body page-body--docs">
         <div class="docs-layout">
 
             <!-- TOC -->

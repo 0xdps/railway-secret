@@ -11,6 +11,8 @@
 
 $savedLength   = (int)($config['length']   ?? 32);
 $savedEncoding = $config['encoding']       ?? 'hex';
+$syncGroupName = trim((string)($config['sync_group'] ?? ''));
+$syncGroupMembers = isset($syncGroupMembers) && is_array($syncGroupMembers) ? $syncGroupMembers : [];
 ?>
 <div class="modal-header">
     <span class="modal-title">
@@ -36,6 +38,20 @@ $savedEncoding = $config['encoding']       ?? 'hex';
         A new value will be generated and applied to Railway immediately.
         Adjust the settings below only if you want different values for this rotation.
     </p>
+
+    <?php if ($syncGroupName !== '' && !empty($syncGroupMembers)): ?>
+    <div style="margin-bottom:14px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);border-radius:var(--radius-sm);padding:10px 12px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">Sync Group Impact</div>
+        <div class="form-hint" style="margin:0 0 6px 0;color:var(--text-secondary);">
+            This key belongs to <strong><?= htmlspecialchars($syncGroupName) ?></strong>. Rotating now will also rotate:
+        </div>
+        <ul style="margin:0;padding-left:16px;color:var(--text-secondary);font-size:12px;line-height:1.5;">
+            <?php foreach ($syncGroupMembers as $member): ?>
+                <li><strong><?= htmlspecialchars((string)($member['secret_name'] ?? '')) ?></strong> in <?= htmlspecialchars((string)($member['service'] ?? '')) ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
+    <?php endif; ?>
 
     <div class="form-row">
         <div class="form-group">
@@ -64,8 +80,8 @@ $savedEncoding = $config['encoding']       ?? 'hex';
         <div class="form-hint">Only needed when setting an externally-issued credential (e.g. a Stripe key or OAuth secret).</div>
     </div>
 
-    <div class="modal-actions-primary" style="margin-top:4px;">
-        <button type="submit" class="btn btn-primary btn-md" style="width:100%;justify-content:center;">
+    <div class="modal-actions">
+        <button type="submit" class="btn btn-primary btn-md">
             <i data-lucide="rotate-cw" style="width:13px;height:13px;"></i>
             Rotate Now
         </button>
