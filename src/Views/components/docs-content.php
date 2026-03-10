@@ -21,6 +21,7 @@
                 <a href="#how-it-works">How it works</a>
                 <a href="#env-vars">Environment variables</a>
                 <a href="#rotation">Rotation modes</a>
+                <a href="#groups">Service groups</a>
                 <a href="#deployment">Deployment</a>
                 <a href="#security">Security model</a>
             </nav>
@@ -133,6 +134,44 @@
                         Set it to <code>0</code> to make a secret manual-only; the cron job will skip it.
                     </span>
                 </div>
+
+                <hr class="docs-divider">
+
+                <h2 id="groups">Service groups</h2>
+                <p>
+                    When a project grows beyond a handful of services, the sidebar can become hard to
+                    scan. Service groups let you organise services into named, collapsible sections so
+                    related services stay together.
+                </p>
+
+                <h3>Creating a group</h3>
+                <p>
+                    Click the <strong>+</strong> button next to the <em>Services</em> label in the sidebar.
+                    A modal will appear where you give the group a name and select which services belong to it.
+                    You can assign the same service to multiple groups.
+                </p>
+
+                <h3>Editing a group</h3>
+                <p>
+                    Hover a group header in the sidebar and click the <strong>pencil</strong> icon to rename
+                    the group or change its members. To remove a group entirely, clear all its members and save
+                    &mdash; the empty group is deleted automatically.
+                </p>
+
+                <h3>Ungrouped services</h3>
+                <p>
+                    Services not assigned to any custom group appear under an <em>Ungrouped</em> section.
+                    This section disappears once every service belongs to a group. When no custom groups
+                    exist at all, all services are shown under a single <em>Services</em> bucket which
+                    cannot be renamed or deleted.
+                </p>
+
+                <h3>Collapse state</h3>
+                <p>
+                    The open/closed state of each group is persisted to <code>localStorage</code> and
+                    restored on every page load. The group containing the currently-active service is
+                    always expanded automatically.
+                </p>
 
                 <hr class="docs-divider">
 

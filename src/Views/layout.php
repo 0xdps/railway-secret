@@ -47,7 +47,7 @@
 </div><!-- /app-layout -->
 
 <!-- ── Site Footer ──────────────────────────────────────────────── -->
-<?php global $appConfig; $dev = $appConfig['dev']; ?>
+<?php global $appConfig; $dev = $appConfig['dev']; $repo = $appConfig['repo']; ?>
 <footer class="site-footer">
     <span class="site-footer-credit">
         Made with <span class="footer-heart">&#9829;</span> by
@@ -60,6 +60,7 @@
            hx-target="#mainContent"
            hx-swap="outerHTML"
            hx-push-url="true">About</a>
+        <a href="<?= htmlspecialchars($repo['source'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Github ↗</a>
         <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>
         <a href="<?= htmlspecialchars($dev['support'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Support ↗</a>
     </nav>
