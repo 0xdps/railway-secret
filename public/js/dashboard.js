@@ -681,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDocumentTitle();
         updateCacheStatus();
         initConfigModal();       // re-wire modal controls after HTMX swap
+        if (typeof window.initTocScrollSpy === 'function') window.initTocScrollSpy();
     });
     document.body.addEventListener('htmx:afterSettle', () => {
         refreshIcons();

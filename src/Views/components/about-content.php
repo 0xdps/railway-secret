@@ -24,11 +24,22 @@ $repo = $appConfig['repo'];
     </div>
 
     <!-- Page Body -->
-    <div class="page-body">
+    <div class="page-body page-body--docs">
+        <div class="docs-layout">
+
+            <!-- TOC -->
+            <nav class="docs-toc">
+                <div class="docs-toc-label">On this page</div>
+                <a href="#story">The Story</a>
+                <a href="#features">What it does</a>
+                <a href="#developer">The Developer</a>
+                <a href="#support">Support the Project</a>
+            </nav>
+
         <div class="about-page">
 
             <!-- ── Origin Story ─────────────────────────────────────── -->
-            <section class="about-section">
+            <section class="about-section" id="story">
                 <div class="about-section-eyebrow">The Story</div>
                 <h2 class="about-section-title">It started with a security audit we didn't expect to fail.</h2>
 
@@ -82,7 +93,7 @@ $repo = $appConfig['repo'];
             </section>
 
             <!-- ── Features callout ────────────────────────────────── -->
-            <section class="about-section">
+            <section class="about-section" id="features">
                 <div class="about-section-eyebrow">What it does</div>
                 <div class="about-features-grid">
                     <div class="about-feature-card">
@@ -119,7 +130,7 @@ $repo = $appConfig['repo'];
             </section>
 
             <!-- ── Developer ───────────────────────────────────────── -->
-            <section class="about-section">
+            <section class="about-section" id="developer">
                 <div class="about-section-eyebrow">The Developer</div>
                 <div class="about-dev-card">
                     <img
@@ -162,7 +173,7 @@ $repo = $appConfig['repo'];
             </section>
 
             <!-- ── Support ─────────────────────────────────────────── -->
-            <section class="about-section">
+            <section class="about-section" id="support">
                 <div class="about-section-eyebrow">Support the Project</div>
                 <h2 class="about-section-title">If this saved you time, pay it forward.</h2>
                 <div class="about-prose" style="margin-bottom: 24px;">
@@ -222,6 +233,7 @@ $repo = $appConfig['repo'];
             </div>
 
         </div><!-- /about-page -->
+        </div><!-- /docs-layout -->
     </div><!-- /page-body -->
 
 </div><!-- /mainContent -->

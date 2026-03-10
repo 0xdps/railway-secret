@@ -7,7 +7,9 @@
  * @var array  $groupedServices
  */
 
-$pageScript = 'dashboard.js';
+$pageScript = 'docs.js';
+
+$extraHead = '<script src="/js/dashboard.js" defer></script>';
 
 $serviceId = null;
 $section   = 'about';
