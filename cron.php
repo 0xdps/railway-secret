@@ -1,10 +1,14 @@
 <?php
 
+require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/bootstrap.php';
 
 use App\Service\RailwayClient;
 use App\Service\StorageService;
 use App\Service\RotatorService;
+use GuzzleHttp\Client as GuzzleClient;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
 
 function getRequiredEnv(string $name): string
 {
@@ -37,7 +41,14 @@ try {
 
     $dbPath = __DIR__ . '/storage/db/secrets.sqlite';
 
-    $railway = new RailwayClient($railwayToken);
+    $cronLogger = new Logger('cron');
+    $cronLogger->pushHandler(new StreamHandler(STDERR, Logger::DEBUG));
+
+    $railway = new RailwayClient(
+        $railwayToken,
+        new GuzzleClient(['timeout' => 30, 'connect_timeout' => 10]),
+        $cronLogger
+    );
     $storage = new StorageService($dbPath, $masterKey);
     $rotator = new RotatorService($railway, $storage);
 } catch (\Throwable $e) {

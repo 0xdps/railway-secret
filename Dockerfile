@@ -1,5 +1,8 @@
 FROM php:8.2-fpm-alpine
 
+# Grab Composer binary from the official image
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 # Install system dependencies
 RUN apk add --no-cache \
     nginx \
@@ -19,6 +22,9 @@ WORKDIR /var/www/html
 
 # Copy project files
 COPY . .
+
+# Install PHP dependencies (no dev packages, optimise autoloader)
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
 # Ensure storage is writable
 RUN mkdir -p /var/www/html/storage/db && \

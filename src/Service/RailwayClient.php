@@ -1,52 +1,49 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Service;
+
+use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\GuzzleException;
+use Psr\Log\LoggerInterface;
 
 class RailwayClient
 {
-    private string $token;
     private string $endpoint = 'https://backboard.railway.app/graphql/v2';
 
-    public function __construct(string $token)
-    {
-        $this->token = $token;
-    }
+    public function __construct(
+        private readonly string          $token,
+        private readonly GuzzleClient    $client,
+        private readonly LoggerInterface $logger,
+    ) {}
 
     /**
      * Generic GraphQL request
      */
     private function request(string $query, array $variables = []): array
     {
-        $payload = json_encode(['query' => $query, 'variables' => $variables]);
-        $ch = curl_init($this->endpoint);
-        
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        $headers = ['Content-Type: application/json'];
-        if (strpos($this->token, 'pt_') === 0) {
-            $headers[] = 'Project-Access-Token: ' . $this->token;
+        $headers = ['Content-Type' => 'application/json'];
+        if (str_starts_with($this->token, 'pt_')) {
+            $headers['Project-Access-Token'] = $this->token;
         } else {
-            $headers[] = 'Authorization: Bearer ' . $this->token;
-        }
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        // curl_close() is a no-op since PHP 8.0 and was removed in PHP 8.5
-
-        if ($error) {
-            error_log("Railway API Client CURL Error: $error");
-            throw new \Exception("CURL Error: " . $error);
+            $headers['Authorization'] = 'Bearer ' . $this->token;
         }
 
-        $data = json_decode($response, true);
-        if ($httpCode >= 400 || isset($data['errors'])) {
-            $msg = $data['errors'][0]['message'] ?? "HTTP $httpCode";
-            throw new \Exception("Railway API Error: " . $msg);
+        try {
+            $res = $this->client->post($this->endpoint, [
+                'headers' => $headers,
+                'json'    => ['query' => $query, 'variables' => $variables],
+            ]);
+        } catch (GuzzleException $e) {
+            $this->logger->error('Railway API request failed', ['error' => $e->getMessage()]);
+            throw new \RuntimeException('Railway API request failed: ' . $e->getMessage(), 0, $e);
+        }
+
+        $data = json_decode((string)$res->getBody(), true);
+        if (isset($data['errors'])) {
+            $msg = $data['errors'][0]['message'] ?? 'Unknown API error';
+            throw new \RuntimeException('Railway API Error: ' . $msg);
         }
 
         return $data['data'] ?? [];
