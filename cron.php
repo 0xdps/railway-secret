@@ -89,25 +89,34 @@ foreach ($managed as $key => $config) {
         continue;
     }
 
-    // Check last AUTOMATIC rotation time (ignore manual rotations for scheduling).
-    // Apply up to a 5-minute buffer so a cron that runs slightly late is not
-    // double-triggered. Cap at half the configured interval so the buffer never
-    // exceeds the interval itself (avoids always-due for short minute intervals).
-    $bufferSeconds = 5 * 60;
-    $bufferInUnits = min($bufferSeconds / $timeConfig['divisor'], $interval / 2.0);
+    // Clock-aligned scheduling: floor the current time to the nearest interval
+    // boundary so rotations snap to fixed "buckets" (e.g. every hour fires at
+    // :00, every 4 hours fires at 00:00/04:00/08:00/…) rather than drifting
+    // relative to whenever the first rotation happened.
+    $intervalSeconds = $interval * $timeConfig['divisor'];
+    $now             = time();
+    $bucketStart     = (int)(floor($now / $intervalSeconds) * $intervalSeconds);
+    $nextBucket      = $bucketStart + $intervalSeconds;
 
     $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
 
     if ($lastAutoTs === null) {
         $isDue  = true;
         $reason = 'first automatic rotation';
+    } elseif ($lastAutoTs >= $bucketStart) {
+        $isDue  = false;
+        $reason = sprintf(
+            'already rotated in current %s window — next at %s UTC',
+            $timeConfig['label'],
+            gmdate('H:i', $nextBucket)
+        );
     } else {
-        $elapsed = (time() - $lastAutoTs) / $timeConfig['divisor'];
-        $isDue   = $elapsed >= ($interval - $bufferInUnits);
-        $reason  = $isDue
-            ? sprintf('%.1f %s since last auto rotation (interval: %d %s, buffer: 5 min)',
-                $elapsed, $timeConfig['label'], $interval, $timeConfig['label'])
-            : sprintf('%.1f / %d %s elapsed since last auto rotation', $elapsed, $interval, $timeConfig['label']);
+        $isDue  = true;
+        $reason = sprintf(
+            'current %s window (started %s UTC) not yet rotated',
+            $timeConfig['label'],
+            gmdate('H:i', $bucketStart)
+        );
     }
 
     if ($isDue) {
