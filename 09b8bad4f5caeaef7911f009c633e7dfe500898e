@@ -1,0 +1,31 @@
+cron.php
+  1a4a271500156eee 91-96,99,101,103,106-107
+src/Views/components/managed-main.php
+  1a4a271500156eee 10,13-15,99-101
+src/Service/RotatorService.php
+  1a4a271500156eee 52-60,123-129,220-224
+src/Controller/ApiController.php
+  1a4a271500156eee 230-232
+src/Service/StorageService.php
+  1a4a271500156eee 90,184-227,230-232,267-278,283-284,290-296,305,719,741-781
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "09b8bad4f5caeaef7911f009c633e7dfe500898e",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 170,
+      "total_deletions": 107,
+      "accepted_lines": 161,
+      "overriden_lines": 0
+    }
+  }
+}
