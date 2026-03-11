@@ -51,6 +51,7 @@ try {
     );
     $storage = new StorageService($dbPath, $masterKey);
     $rotator = new RotatorService($railway, $storage);
+    $dryRun  = filter_var(getenv('DRY_RUN') ?: 'false', FILTER_VALIDATE_BOOLEAN);
 } catch (\Throwable $e) {
     fwrite(STDERR, 'Configuration error: ' . $e->getMessage() . "\n");
     exit(1);
@@ -65,6 +66,9 @@ if (empty($managed)) {
 }
 
 echo "Starting scheduled rotations (" . date('Y-m-d H:i:s') . ")...\n";
+if ($dryRun) {
+    echo "*** DRY RUN — secrets will NOT be updated on Railway ***\n";
+}
 echo str_repeat('-', 60) . "\n";
 
 // Pass 1 — determine which secrets are due for rotation
@@ -86,9 +90,11 @@ foreach ($managed as $key => $config) {
     }
 
     // Check last AUTOMATIC rotation time (ignore manual rotations for scheduling).
-    // Apply a 5-minute buffer so a cron that runs slightly late is not double-triggered.
+    // Apply up to a 5-minute buffer so a cron that runs slightly late is not
+    // double-triggered. Cap at half the configured interval so the buffer never
+    // exceeds the interval itself (avoids always-due for short minute intervals).
     $bufferSeconds = 5 * 60;
-    $bufferInUnits = $bufferSeconds / $timeConfig['divisor'];
+    $bufferInUnits = min($bufferSeconds / $timeConfig['divisor'], $interval / 2.0);
 
     $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
 
@@ -146,6 +152,14 @@ foreach (array_keys($dueSyncGroups) as $groupName) {
     echo "  QUEUED sync-group [{$groupName}] — 1 shared value for all members\n";
 }
 echo str_repeat('-', 60) . "\n";
+
+// In dry-run mode stop here — show what would have been rotated but make no changes.
+if ($dryRun) {
+    $totalDue = count($dueSecrets) + count($dueSyncGroups);
+    echo "[DRY RUN] {$totalDue} rotation(s) queued above — no changes made to Railway.\n";
+    echo "Done (dry run).\n";
+    exit(0);
+}
 
 // Pass 2a — rotate standalone secrets (one Railway call per scope)
 $results = !empty($dueSecrets)

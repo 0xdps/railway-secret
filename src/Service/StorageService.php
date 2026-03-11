@@ -442,7 +442,7 @@ class StorageService
             "SELECT rotated_at FROM secret_history
              WHERE secret_name = :name
                AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))
-               AND trigger_type = 'auto'
+               AND trigger_type IN ('auto', 'sync-auto')
              ORDER BY rotated_at DESC, id DESC
              LIMIT 1"
         );

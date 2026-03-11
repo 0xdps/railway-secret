@@ -1,0 +1,69 @@
+# Local development stack — mirrors the Railway deployment.
+#
+# Prerequisites:
+#   cp .env.example .env   # then fill in your RAILWAY_TOKEN, keys, etc.
+#   docker compose up --build
+#
+# Services:
+#   app  — Nginx + PHP-FPM web server on http://localhost:8080
+#   cron — PHP CLI rotation loop (runs cron.php every 60 s)
+#
+# Both containers share a named volume for the SQLite database so rotation
+# history is visible in the dashboard immediately after the cron runs.
+#
+# Tip: set DRY_RUN=true in your .env to watch the cron evaluate rotations
+# without actually pushing any changes to Railway.
+
+services:
+
+  # ── Web application ──────────────────────────────────────────────────────
+  app:
+    container_name: railway-secrets-app
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - storage:/var/www/html/storage
+    # Bypass start.sh so crond never starts in this container.
+    # Cron runs exclusively in the `cron` service below.
+    command: >
+      sh -c '
+        mkdir -p /var/www/html/storage/db
+        chown -R www-data:www-data /var/www/html/storage
+        chmod -R 770 /var/www/html/storage
+        PORT_TO_USE=$${PORT:-8080}
+        sed -i "s/listen 80;/listen $${PORT_TO_USE};/" /etc/nginx/http.d/default.conf
+        php-fpm -D
+        exec nginx -g "daemon off;"
+      '
+    restart: unless-stopped
+
+  # ── Background rotation cron ─────────────────────────────────────────────
+  cron:
+    container_name: railway-secrets-cron
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - storage:/var/www/html/storage
+    # Override CMD: skip nginx/php-fpm, just run the PHP rotation script in a loop.
+    # busybox `date` on Alpine uses the same format as GNU date.
+    command: >
+      sh -c '
+        mkdir -p /var/www/html/storage/db
+        while true; do
+          echo "=== [$(date +"%Y-%m-%d %T")] rotation tick ==="
+          php /var/www/html/cron.php
+          echo ""
+          sleep 60
+        done
+      '
+    restart: unless-stopped
+
+# ── Shared storage volume ────────────────────────────────────────────────────
+# SQLite database is preserved across container restarts.
+# Inspect with: docker volume inspect railway-secrets_storage
+volumes:
+  storage:
