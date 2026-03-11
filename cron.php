@@ -98,11 +98,24 @@ foreach ($managed as $key => $config) {
     $bucketStart     = (int)(floor($now / $intervalSeconds) * $intervalSeconds);
     $nextBucket      = $bucketStart + $intervalSeconds;
 
-    $lastAutoTs = $storage->getLastAutoRotatedAt($secret, $serviceId);
+    $lastAutoTs  = $storage->getLastAutoRotatedAt($secret, $serviceId);
+    $createdAt   = isset($config['created_at']) ? strtotime((string)$config['created_at']) : 0;
 
-    if ($lastAutoTs === null) {
+    if ($lastAutoTs === null && ($createdAt === false || $createdAt >= $bucketStart)) {
+        // Newly added within the current bucket window — wait for the next one.
+        $isDue  = false;
+        $reason = sprintf(
+            'newly managed — first auto rotation scheduled at %s UTC',
+            gmdate('H:i', $nextBucket)
+        );
+    } elseif ($lastAutoTs === null) {
+        // Added before this bucket window but only ever manually rotated — schedule now.
         $isDue  = true;
-        $reason = 'first automatic rotation';
+        $reason = sprintf(
+            'never auto-rotated — current %s window (started %s UTC)',
+            $timeConfig['label'],
+            gmdate('H:i', $bucketStart)
+        );
     } elseif ($lastAutoTs >= $bucketStart) {
         $isDue  = false;
         $reason = sprintf(

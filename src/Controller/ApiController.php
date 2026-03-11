@@ -227,10 +227,18 @@ class ApiController
                     continue;
                 }
 
-                $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
-                $secret     = $config['secret_name'];
-                $lastAutoTs = $this->storage->getLastAutoRotatedAt($secret, $serviceId);
-                $isDue      = $lastAutoTs === null || ((time() - $lastAutoTs) / $timeConfig['divisor']) >= $interval;
+                $timeConfig      = getUnitConfig($config['interval_unit'] ?? 'day');
+                $secret          = $config['secret_name'];
+                $lastAutoTs      = $this->storage->getLastAutoRotatedAt($secret, $serviceId);
+                $intervalSeconds = $interval * $timeConfig['divisor'];
+                $bucketStart     = (int)(floor(time() / $intervalSeconds) * $intervalSeconds);
+                $createdAt       = !empty($config['created_at']) ? strtotime((string)$config['created_at']) : 0;
+                if ($lastAutoTs === null) {
+                    // Due only if the key was added before the current bucket (only manually rotated since).
+                    $isDue = ($createdAt !== false && $createdAt < $bucketStart);
+                } else {
+                    $isDue = $lastAutoTs < $bucketStart;
+                }
 
                 if ($isDue) {
                     if ($syncGroup !== '') {

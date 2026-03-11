@@ -86,6 +86,7 @@ class StorageService
         )");
 
         $this->migrateToSyncGroupsTable();
+        $this->migrateAddCreatedAt();
     }
 
     /**
@@ -159,6 +160,26 @@ class StorageService
         $this->db->exec("PRAGMA user_version = 2");
     }
 
+    /**
+     * Migration v3: add created_at to managed_secrets so the scheduler can
+     * distinguish 'just added this window' from 'only manually rotated'.
+     */
+    private function migrateAddCreatedAt(): void
+    {
+        $version = (int)$this->db->querySingle("PRAGMA user_version");
+        if ($version >= 3) {
+            return;
+        }
+
+        if (!$this->tableHasColumn('managed_secrets', 'created_at')) {
+            $this->db->exec("ALTER TABLE managed_secrets ADD COLUMN created_at DATETIME");
+            // Existing rows: set to now — they will wait for the next bucket, then schedule normally.
+            $this->db->exec("UPDATE managed_secrets SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL");
+        }
+
+        $this->db->exec("PRAGMA user_version = 3");
+    }
+
     private function tableHasColumn(string $table, string $column): bool
     {
         $escapedTable = str_replace("'", "''", $table);
@@ -194,9 +215,15 @@ class StorageService
         }
 
         $stmt = $this->db->prepare("
-            INSERT OR REPLACE INTO managed_secrets
-            (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit)
-            VALUES (:name, :sid, :len, :enc, :sync_group, :int, :unit)
+            INSERT INTO managed_secrets
+                (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit, created_at)
+            VALUES (:name, :sid, :len, :enc, :sync_group, :int, :unit, CURRENT_TIMESTAMP)
+            ON CONFLICT(secret_name, service_id) DO UPDATE SET
+                length        = excluded.length,
+                encoding      = excluded.encoding,
+                sync_group    = excluded.sync_group,
+                interval_days = excluded.interval_days,
+                interval_unit = excluded.interval_unit
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
@@ -618,7 +645,7 @@ class StorageService
     {
         $result = $this->db->query("
                  SELECT ms.secret_name, ms.service_id, ms.length, ms.encoding, ms.sync_group,
-                   ms.interval_days, ms.interval_unit,
+                   ms.interval_days, ms.interval_unit, ms.created_at,
                    COALESCE(sm.service_name, 'Global') AS service_name,
                    (SELECT rotated_at FROM secret_history
                     WHERE secret_name = ms.secret_name
