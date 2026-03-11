@@ -7,23 +7,12 @@
  * @var array  $allManaged
  */
 
-// Pre-compute how many scheduled secrets are currently due (clock-aligned)
+// Pre-compute how many scheduled secrets are currently due
 $dueCount = 0;
 foreach ($allManaged as $row) {
-    $interval = (int)($row['interval_days'] ?? 0);
-    if ($interval > 0) {
-        $unitConf        = getUnitConfig($row['interval_unit'] ?? 'day');
-        $intervalSeconds = $interval * $unitConf['divisor'];
-        $bucketStart     = (int)(floor(time() / $intervalSeconds) * $intervalSeconds);
-        $lastAutoTs      = !empty($row['last_auto_rotated']) ? strtotime((string)$row['last_auto_rotated']) : null;
-        $createdAt       = !empty($row['created_at']) ? strtotime((string)$row['created_at']) : 0;
-        if ($lastAutoTs === null) {
-            // Due if the key was added before the current bucket (only manually rotated since).
-            if ($createdAt !== false && $createdAt < $bucketStart) {
-                $dueCount++;
-            }
-            // else: added in this window — not yet due
-        } elseif ($lastAutoTs < $bucketStart) {
+    if ((int)($row['interval_days'] ?? 0) > 0) {
+        $nextAt = !empty($row['next_rotation_at']) ? strtotime((string)$row['next_rotation_at']) : null;
+        if ($nextAt !== null && $nextAt <= time()) {
             $dueCount++;
         }
     }
@@ -107,18 +96,9 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
                     $unitSuffix   = ['minute' => 'm', 'hour' => 'h', 'day' => 'd'][$row['interval_unit'] ?? 'day'] ?? 'd';
                     $isManualOnly = $interval === 0;
                     $unitConf     = getUnitConfig($row['interval_unit'] ?? 'day');
-                    $isDue        = false;
-                    if (!$isManualOnly) {
-                        $intervalSeconds = $interval * $unitConf['divisor'];
-                        $bucketStart     = (int)(floor(time() / $intervalSeconds) * $intervalSeconds);
-                        $lastAutoTs      = !empty($row['last_auto_rotated']) ? strtotime((string)$row['last_auto_rotated']) : null;
-                        $createdAt       = !empty($row['created_at']) ? strtotime((string)$row['created_at']) : 0;
-                        if ($lastAutoTs === null) {
-                            $isDue = ($createdAt !== false && $createdAt < $bucketStart);
-                        } else {
-                            $isDue = $lastAutoTs < $bucketStart;
-                        }
-                    }
+                    $isDue = !$isManualOnly
+                        && !empty($row['next_rotation_at'])
+                        && strtotime((string)$row['next_rotation_at']) <= time();
                     $syncGroupValue = trim((string)($row['sync_group'] ?? ''));
                 ?>
                     <tr class="managed-row" data-sync-group="<?= htmlspecialchars($syncGroupValue !== '' ? $syncGroupValue : '__none__', ENT_QUOTES, 'UTF-8') ?>">

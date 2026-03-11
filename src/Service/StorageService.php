@@ -87,6 +87,7 @@ class StorageService
 
         $this->migrateToSyncGroupsTable();
         $this->migrateAddCreatedAt();
+        $this->migrateAddNextRotationAt();
     }
 
     /**
@@ -180,6 +181,55 @@ class StorageService
         $this->db->exec("PRAGMA user_version = 3");
     }
 
+    /**
+     * Migration v4: add next_rotation_at to managed_secrets.
+     * Stores the pre-computed timestamp of the next scheduled auto-rotation so
+     * the cron, dashboard, and API all share one source of truth — no bucket
+     * arithmetic scattered across files.
+     */
+    private function migrateAddNextRotationAt(): void
+    {
+        $version = (int)$this->db->querySingle("PRAGMA user_version");
+        if ($version >= 4) {
+            return;
+        }
+
+        if (!$this->tableHasColumn('managed_secrets', 'next_rotation_at')) {
+            $this->db->exec("ALTER TABLE managed_secrets ADD COLUMN next_rotation_at DATETIME");
+        }
+
+        // Back-fill existing rows: compute the next clock-aligned bucket so they
+        // do NOT fire immediately — they will wait for the next natural window.
+        $result     = $this->db->query(
+            "SELECT secret_name, service_id, interval_days, interval_unit
+             FROM managed_secrets
+             WHERE next_rotation_at IS NULL AND interval_days > 0"
+        );
+        $divisorMap = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
+        $now        = time();
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $divisor         = $divisorMap[(string)($row['interval_unit'] ?? 'day')] ?? 86400;
+            $intervalSeconds = (int)$row['interval_days'] * $divisor;
+            if ($intervalSeconds <= 0) {
+                continue;
+            }
+            $bucketStart = (int)(floor($now / $intervalSeconds) * $intervalSeconds);
+            $nextAt      = gmdate('Y-m-d H:i:s', $bucketStart + $intervalSeconds);
+            $sid         = $row['service_id'] ?? null;
+            $upd         = $this->db->prepare(
+                "UPDATE managed_secrets SET next_rotation_at = :next
+                 WHERE secret_name = :name
+                   AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))"
+            );
+            $upd->bindValue(':next', $nextAt, SQLITE3_TEXT);
+            $upd->bindValue(':name', (string)$row['secret_name'], SQLITE3_TEXT);
+            $upd->bindValue(':sid', $sid, $sid === null ? SQLITE3_NULL : SQLITE3_TEXT);
+            $upd->execute();
+        }
+
+        $this->db->exec("PRAGMA user_version = 4");
+    }
+
     private function tableHasColumn(string $table, string $column): bool
     {
         $escapedTable = str_replace("'", "''", $table);
@@ -214,16 +264,36 @@ class StorageService
             ]);
         }
 
+        // Compute the next clock-aligned rotation bucket. Passed to INSERT for new rows;
+        // on UPDATE only applied if the interval actually changed (see CASE in SQL below).
+        $intervalDays = (int)($config['interval_days'] ?? 0);
+        $intervalUnit = $config['interval_unit'] ?? 'day';
+        $divisorMap   = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
+        $intervalSecs = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
+        if ($intervalSecs > 0) {
+            $now         = time();
+            $bucketStart = (int)(floor($now / $intervalSecs) * $intervalSecs);
+            $nextAt      = gmdate('Y-m-d H:i:s', $bucketStart + $intervalSecs);
+        } else {
+            $nextAt = null; // manual-only
+        }
+
         $stmt = $this->db->prepare("
             INSERT INTO managed_secrets
-                (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit, created_at)
-            VALUES (:name, :sid, :len, :enc, :sync_group, :int, :unit, CURRENT_TIMESTAMP)
+                (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit, created_at, next_rotation_at)
+            VALUES (:name, :sid, :len, :enc, :sync_group, :int, :unit, CURRENT_TIMESTAMP, :next_at)
             ON CONFLICT(secret_name, service_id) DO UPDATE SET
-                length        = excluded.length,
-                encoding      = excluded.encoding,
-                sync_group    = excluded.sync_group,
-                interval_days = excluded.interval_days,
-                interval_unit = excluded.interval_unit
+                length           = excluded.length,
+                encoding         = excluded.encoding,
+                sync_group       = excluded.sync_group,
+                interval_days    = excluded.interval_days,
+                interval_unit    = excluded.interval_unit,
+                next_rotation_at = CASE
+                    WHEN excluded.interval_days != managed_secrets.interval_days
+                      OR excluded.interval_unit  != managed_secrets.interval_unit
+                    THEN excluded.next_rotation_at
+                    ELSE managed_secrets.next_rotation_at
+                END
         ");
         $stmt->bindValue(':name', $name, SQLITE3_TEXT);
         $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
@@ -232,6 +302,7 @@ class StorageService
         $stmt->bindValue(':sync_group', $syncGroup !== '' ? $syncGroup : null, $syncGroup !== '' ? SQLITE3_TEXT : SQLITE3_NULL);
         $stmt->bindValue(':int', $config['interval_days'] ?? 0, SQLITE3_INTEGER);
         $stmt->bindValue(':unit', $config['interval_unit'] ?? 'day', SQLITE3_TEXT);
+        $stmt->bindValue(':next_at', $nextAt, $nextAt === null ? SQLITE3_NULL : SQLITE3_TEXT);
 
         return (bool)$stmt->execute();
     }
@@ -645,7 +716,7 @@ class StorageService
     {
         $result = $this->db->query("
                  SELECT ms.secret_name, ms.service_id, ms.length, ms.encoding, ms.sync_group,
-                   ms.interval_days, ms.interval_unit, ms.created_at,
+                   ms.interval_days, ms.interval_unit, ms.created_at, ms.next_rotation_at,
                    COALESCE(sm.service_name, 'Global') AS service_name,
                    (SELECT rotated_at FROM secret_history
                     WHERE secret_name = ms.secret_name
@@ -667,9 +738,51 @@ class StorageService
         return $rows;
     }
 
+    /**
+     * Advance next_rotation_at for a single secret by exactly one interval
+     * (preserves clock alignment regardless of when the cron actually ran).
+     */
+    public function advanceNextRotationAt(string $name, ?string $serviceId, int $intervalDays, string $intervalUnit): void
+    {
+        $divisorMap      = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
+        $intervalSeconds = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
+        if ($intervalSeconds <= 0) {
+            return;
+        }
+        $stmt = $this->db->prepare(
+            "UPDATE managed_secrets
+             SET next_rotation_at = datetime(next_rotation_at, '+' || :secs || ' seconds')
+             WHERE secret_name = :name
+               AND (service_id = :sid OR (service_id IS NULL AND :sid IS NULL))"
+        );
+        $stmt->bindValue(':secs', $intervalSeconds, SQLITE3_INTEGER);
+        $stmt->bindValue(':name', $name, SQLITE3_TEXT);
+        $stmt->bindValue(':sid', $serviceId, $serviceId === null ? SQLITE3_NULL : SQLITE3_TEXT);
+        $stmt->execute();
+    }
+
+    /**
+     * Advance next_rotation_at for every member of a sync group.
+     */
+    public function advanceNextRotationAtForGroup(string $groupName, int $intervalDays, string $intervalUnit): void
+    {
+        $divisorMap      = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
+        $intervalSeconds = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
+        if ($intervalSeconds <= 0) {
+            return;
+        }
+        $stmt = $this->db->prepare(
+            "UPDATE managed_secrets
+             SET next_rotation_at = datetime(next_rotation_at, '+' || :secs || ' seconds')
+             WHERE sync_group = :group"
+        );
+        $stmt->bindValue(':secs', $intervalSeconds, SQLITE3_INTEGER);
+        $stmt->bindValue(':group', $groupName, SQLITE3_TEXT);
+        $stmt->execute();
+    }
+
     public function setServiceGroup(string $serviceId, ?string $groupName): void
     {
-        $serviceId = trim($serviceId);
         if ($serviceId === '') {
             throw new \InvalidArgumentException('Invalid service id');
         }

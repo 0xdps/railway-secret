@@ -49,6 +49,15 @@ class RotatorService
             // 6. Record this rotation: store the old value (may be null for first-ever
             //    rotation); new value will be back-filled on the next rotation.
             $this->storage->addHistory($keyName, $oldValue, $serviceId, $triggerType);
+
+            // 7. Advance the scheduled next-rotation timestamp (auto only).
+            if ($triggerType === 'auto') {
+                $this->storage->advanceNextRotationAt(
+                    $keyName, $serviceId,
+                    (int)($config['interval_days'] ?? 0),
+                    (string)($config['interval_unit'] ?? 'day')
+                );
+            }
         }
 
         return $success;
@@ -109,6 +118,15 @@ class RotatorService
                 }
                 $this->storage->addHistory($name, $oldValue, $serviceId, $historyTrigger);
             }
+        }
+
+        // Advance the scheduled next-rotation timestamp for every group member (auto only).
+        if ($historyTrigger === 'sync-auto') {
+            $this->storage->advanceNextRotationAtForGroup(
+                $groupName,
+                (int)($first['interval_days'] ?? 0),
+                (string)($first['interval_unit'] ?? 'day')
+            );
         }
 
         return true;
@@ -199,6 +217,11 @@ class RotatorService
                 }
 
                 $this->storage->addHistory($name, $oldValue, $serviceId, $trigger);
+                $this->storage->advanceNextRotationAt(
+                    $name, $serviceId,
+                    (int)($item['interval_days'] ?? 0),
+                    (string)($item['interval_unit'] ?? 'day')
+                );
                 $results[$name] = 'success';
             }
         }

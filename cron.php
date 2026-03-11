@@ -77,7 +77,6 @@ $dueSyncGroups = []; // sync group name => true (deduplicated)
 
 foreach ($managed as $key => $config) {
     $interval   = (int)($config['interval_days'] ?? 0);
-    $timeConfig = getUnitConfig($config['interval_unit'] ?? 'day');
     $secret     = $config['secret_name'];
     $serviceId  = $config['service_id'] ?: null;
     $scopeLabel = $serviceId ? "service:{$serviceId}" : 'global';
@@ -89,63 +88,23 @@ foreach ($managed as $key => $config) {
         continue;
     }
 
-    // Clock-aligned scheduling: floor the current time to the nearest interval
-    // boundary so rotations snap to fixed "buckets" (e.g. every hour fires at
-    // :00, every 4 hours fires at 00:00/04:00/08:00/…) rather than drifting
-    // relative to whenever the first rotation happened.
-    $intervalSeconds = $interval * $timeConfig['divisor'];
-    $now             = time();
-    $bucketStart     = (int)(floor($now / $intervalSeconds) * $intervalSeconds);
-    $nextBucket      = $bucketStart + $intervalSeconds;
-
-    $lastAutoTs  = $storage->getLastAutoRotatedAt($secret, $serviceId);
-    $createdAt   = isset($config['created_at']) ? strtotime((string)$config['created_at']) : 0;
-
-    if ($lastAutoTs === null && ($createdAt === false || $createdAt >= $bucketStart)) {
-        // Newly added within the current bucket window — wait for the next one.
-        $isDue  = false;
-        $reason = sprintf(
-            'newly managed — first auto rotation scheduled at %s UTC',
-            gmdate('H:i', $nextBucket)
-        );
-    } elseif ($lastAutoTs === null) {
-        // Added before this bucket window but only ever manually rotated — schedule now.
-        $isDue  = true;
-        $reason = sprintf(
-            'never auto-rotated — current %s window (started %s UTC)',
-            $timeConfig['label'],
-            gmdate('H:i', $bucketStart)
-        );
-    } elseif ($lastAutoTs >= $bucketStart) {
-        $isDue  = false;
-        $reason = sprintf(
-            'already rotated in current %s window — next at %s UTC',
-            $timeConfig['label'],
-            gmdate('H:i', $nextBucket)
-        );
-    } else {
-        $isDue  = true;
-        $reason = sprintf(
-            'current %s window (started %s UTC) not yet rotated',
-            $timeConfig['label'],
-            gmdate('H:i', $bucketStart)
-        );
+    // Check the pre-computed next_rotation_at timestamp (single source of truth).
+    $nextAt = !empty($config['next_rotation_at']) ? strtotime((string)$config['next_rotation_at']) : null;
+    if ($nextAt === null || $nextAt > time()) {
+        $nextFmt = $nextAt ? gmdate('Y-m-d H:i', $nextAt) . ' UTC' : 'not yet scheduled';
+        echo "  SKIP   {$secret} ({$scopeLabel}) — next rotation at {$nextFmt}\n";
+        continue;
     }
 
-    if ($isDue) {
-        if ($syncGroup !== '') {
-            // Track at the group level — all members share one rotation call
-            $dueSyncGroups[$syncGroup] = true;
-        } else {
-            $dueSecrets[] = array_merge($config, [
-                'service_id'   => $serviceId,
-                'trigger_type' => 'auto',
-                '_reason'      => $reason,
-                '_scope'       => $scopeLabel,
-            ]);
-        }
+    if ($syncGroup !== '') {
+        // Track at the group level — all members share one rotation call
+        $dueSyncGroups[$syncGroup] = true;
     } else {
-        echo "  SKIP   {$secret} ({$scopeLabel}) — {$reason}\n";
+        $dueSecrets[] = array_merge($config, [
+            'service_id'   => $serviceId,
+            'trigger_type' => 'auto',
+            '_scope'       => $scopeLabel,
+        ]);
     }
 }
 
