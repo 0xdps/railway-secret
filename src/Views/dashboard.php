@@ -15,7 +15,7 @@
  * @var int $cacheFetchedAt
  */
 
-$pageScript = 'dashboard.js';
+$pageScript = 'app.js';
 
 $contentCallback = function() use ($viewTitle, $csrfToken, $serviceId, $section, $variables, $managed, $recentHistory, $cacheFetchedAt, $serviceCount, $rotations24h) {
     include __DIR__ . '/components/dashboard-main.php';

@@ -25,7 +25,7 @@
     <script src="https://unpkg.com/lucide@0.577.0/dist/umd/lucide.js" integrity="sha384-1MrOtYSDnlvNAr6rHFMYrjwqLm+8lCPz+suIruDTmum9JoBgagrhFzxveKunHj30" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous" defer></script>
     <?php if (isset($extraHead)): echo $extraHead; endif; ?>
-    <script src="/js/<?= htmlspecialchars($pageScript) ?>" defer></script>
+    <script src="/js/<?= htmlspecialchars($pageScript) ?>"<?= $pageScript === 'app.js' ? ' type="module"' : ' defer' ?>></script>
 </head>
 <body data-current-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-csrf-token="<?= htmlspecialchars($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
 <div class="app-layout">

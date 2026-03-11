@@ -9,7 +9,7 @@
 
 $pageScript = 'docs.js';
 
-$extraHead = '<script src="/js/dashboard.js" defer></script>';
+$extraHead = '<script src="/js/app.js" type="module"></script>';
 
 $serviceId = null;
 $section   = 'about';

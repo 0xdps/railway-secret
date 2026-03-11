@@ -10,7 +10,7 @@
  * @var array  $serviceNameMap
  */
 
-$pageScript = 'dashboard.js';
+$pageScript = 'app.js';
 $serviceId  = null;
 
 $contentCallback = function () use ($viewTitle, $csrfToken, $section, $allManaged) {
