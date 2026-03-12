@@ -1,0 +1,46 @@
+src/Helpers.php
+  23250a00328369a6 96,98,112,115,122
+src/Controller/AuthController.php
+  23250a00328369a6 52
+src/Service/RailwayClient.php
+  23250a00328369a6 53,55,65-74,83,85-103,105
+src/Controller/PageController.php
+  23250a00328369a6 46,112,138,158
+src/Controller/ApiController.php
+  23250a00328369a6 615,650,707-708
+src/Database/MigrationRunner.php
+  23250a00328369a6 248-250,266-271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "4e6bc3caf90c86b60ae12ba89f69d88d70851745",
+  "prompts": {
+    "23250a00328369a6": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "505d8ddd-8daf-4d57-aa13-578975d2663a",
+        "model": "copilot/claude-haiku-4.5"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 254,
+      "total_deletions": 188,
+      "accepted_lines": 62,
+      "overriden_lines": 0
+    },
+    "b67c2cf22451de2a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "a1863498-5c12-4b2e-8a17-35ba688b507b",
+        "model": "copilot/claude-haiku-4.5"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 29,
+      "total_deletions": 88,
+      "accepted_lines": 0,
+      "overriden_lines": 0
+    }
+  }
+}
