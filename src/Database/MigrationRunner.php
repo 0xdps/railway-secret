@@ -71,14 +71,15 @@ class MigrationRunner
     private function migration001(): void
     {
         // ── secret_history ────────────────────────────────────────────────────
-        // Original schema: secret_value was NOT NULL.  New installs get the
-        // table created here; existing installs already have it — IF NOT EXISTS
-        // is a no-op for them and the nullable fix below handles the column type.
+        // New installs get the table created here with the correct nullable
+        // schema (secret_value TEXT), so makeSecretValueNullable() is a no-op.
+        // Existing (legacy) installs already have the table — IF NOT EXISTS is
+        // a no-op for them and makeSecretValueNullable() fixes the column type.
         $this->db->exec("CREATE TABLE IF NOT EXISTS secret_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             secret_name TEXT NOT NULL,
             service_id TEXT,
-            secret_value TEXT NOT NULL,
+            secret_value TEXT,
             rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )");
 
@@ -192,15 +193,21 @@ class MigrationRunner
 
         // Back-fill existing rows: compute the next clock-aligned bucket so
         // they do NOT fire immediately on their first cron run.
-        $result     = $this->db->query(
+        $result = $this->db->query(
             "SELECT secret_name, service_id, interval_days, interval_unit
              FROM managed_secrets
              WHERE next_rotation_at IS NULL AND interval_days > 0"
         );
+        $rows = [];
+        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+            $rows[] = $row;
+        }
+        $result->finalize(); // must close read cursor before issuing writes
+
         $divisorMap = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
         $now        = time();
 
-        while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
+        foreach ($rows as $row) {
             $divisor         = $divisorMap[(string)($row['interval_unit'] ?? 'day')] ?? 86400;
             $intervalSeconds = (int)$row['interval_days'] * $divisor;
             if ($intervalSeconds <= 0) {
@@ -219,6 +226,7 @@ class MigrationRunner
             $stmt->bindValue(':name', (string)$row['secret_name'], SQLITE3_TEXT);
             $stmt->bindValue(':sid', $sid, $sid === null ? SQLITE3_NULL : SQLITE3_TEXT);
             $stmt->execute();
+            $stmt->close();
         }
     }
 
@@ -240,12 +248,23 @@ class MigrationRunner
                 break;
             }
         }
+        // Finalize BEFORE any DDL — un-finalized SQLite3Result objects hold open
+        // read cursors on sqlite_master; those cause SQLITE_LOCKED on schema writes.
+        $result->finalize();
 
         if (!$needsRebuild) {
             return;
         }
 
-        $this->db->exec("BEGIN");
+        // Clean up any leftover table from a previous partial run.
+        $this->db->exec("DROP TABLE IF EXISTS secret_history_old");
+
+        // Run the rename-dance in autocommit (no explicit BEGIN/COMMIT).
+        // Using an explicit transaction here triggers SQLITE_LOCKED on COMMIT/DROP
+        // because PHP keeps SQLite3Result objects alive as read cursors on the
+        // schema table until GC, and SQLite refuses to commit schema changes while
+        // a read cursor from the same connection is still open on sqlite_master.
+        // Each autocommit DDL statement is still individually atomic.
         $this->db->exec("ALTER TABLE secret_history RENAME TO secret_history_old");
         $this->db->exec("CREATE TABLE secret_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -260,18 +279,22 @@ class MigrationRunner
             SELECT id, secret_name, service_id, secret_value, new_secret_value, trigger_type, rotated_at
             FROM secret_history_old");
         $this->db->exec("DROP TABLE secret_history_old");
-        $this->db->exec("COMMIT");
     }
 
     private function tableHasColumn(string $table, string $column): bool
     {
         $safe   = str_replace("'", "''", $table);
         $result = $this->db->query("PRAGMA table_info('{$safe}')");
+        $found  = false;
         while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
             if (($row['name'] ?? null) === $column) {
-                return true;
+                $found = true;
+                break;
             }
         }
-        return false;
+        // Always finalize — early-returning without finalize leaves an open read
+        // cursor on sqlite_master that will cause SQLITE_LOCKED on later DDL.
+        $result->finalize();
+        return $found;
     }
 }
