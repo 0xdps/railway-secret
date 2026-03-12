@@ -49,7 +49,7 @@ class AuthController
             $this->rateLimiter->clearFailure($ip);
             // Warm cache so the dashboard loads instantly.
             try {
-                Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, true);
+                Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, true);
                 Helpers::getVariablesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, null, true);
             } catch (\Exception $e) {
                 $this->logger->warning('Cache warm on login failed', ['error' => $e->getMessage()]);

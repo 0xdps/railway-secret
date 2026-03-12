@@ -612,7 +612,7 @@ class ApiController
         $serviceId = ($params['serviceId'] ?? '') ?: null;
 
         try {
-            $services       = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, false);
+            $services       = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, false);
             $serviceNameMap = Helpers::buildServiceNameMap($services);
             $recentHistory  = $this->storage->getRecentHistory($serviceId, 30);
             $csrfToken      = (string)$request->getAttribute('csrfToken', '');
@@ -647,7 +647,7 @@ class ApiController
             $serviceId    = (string)($detail['service_id'] ?? '');
             $serviceLabel = 'Global Variables';
             if ($serviceId !== '') {
-                $services       = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, false);
+                $services       = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, false);
                 $serviceNameMap = Helpers::buildServiceNameMap($services);
                 $serviceLabel   = $serviceNameMap[$serviceId] ?? $serviceId;
             }
@@ -704,8 +704,8 @@ class ApiController
                 throw new \InvalidArgumentException('Invalid cache scope');
             }
             if ($scope === 'services' || $scope === 'all') {
-                $this->cache->delete(Helpers::cacheKeyServices($this->projectConfig->projectId));
-                Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, true);
+                $this->cache->delete(Helpers::cacheKeyServices($this->projectConfig->projectId, $this->projectConfig->environmentId));
+                Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, true);
             }
             if ($scope === 'variables' || $scope === 'all') {
                 if ($scope === 'all') {

@@ -93,9 +93,9 @@ class Helpers
 
     // ── Cache key helpers ───────────────────────────────────────────────────
 
-    public static function cacheKeyServices(string $projectId): string
+    public static function cacheKeyServices(string $projectId, string $environmentId): string
     {
-        return 'services:' . $projectId;
+        return 'services:' . $projectId . ':' . $environmentId;
     }
 
     public static function cacheKeyVariables(string $projectId, string $environmentId, ?string $serviceId): string
@@ -109,16 +109,17 @@ class Helpers
         RailwayClient $railway,
         RailwayCacheService $cache,
         string $projectId,
+        string $environmentId,
         bool $forceRefresh = false
     ): array {
-        $key = self::cacheKeyServices($projectId);
+        $key = self::cacheKeyServices($projectId, $environmentId);
         if (!$forceRefresh) {
             $cached = $cache->get($key);
             if (is_array($cached)) {
                 return $cached;
             }
         }
-        $services = $railway->getServices($projectId);
+        $services = $railway->getServices($projectId, $environmentId);
         $cache->put($key, $services, CACHE_TTL_SERVICES_SECONDS);
         return $services;
     }

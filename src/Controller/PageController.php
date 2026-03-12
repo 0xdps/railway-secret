@@ -43,7 +43,7 @@ class PageController
         $forceRefresh = ($params['refresh'] ?? '0') === '1';
 
         try {
-            $services = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $forceRefresh);
+            $services = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $forceRefresh);
             $this->storage->syncServiceNames($services);
             $groupedServices = Helpers::buildGroupedServices($services, $this->storage->getServiceGroupMap());
             $serviceNameMap  = Helpers::buildServiceNameMap($services);
@@ -109,7 +109,7 @@ class PageController
         $serviceId  = null;
 
         try {
-            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, false);
+            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, false);
             $this->storage->syncServiceNames($services);
             $groupedServices = Helpers::buildGroupedServices($services, $this->storage->getServiceGroupMap());
             $serviceNameMap  = Helpers::buildServiceNameMap($services);
@@ -135,7 +135,7 @@ class PageController
         $viewTitle  = 'Documentation';
 
         try {
-            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, false);
+            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, false);
             $this->storage->syncServiceNames($services);
             $groupedServices = Helpers::buildGroupedServices($services, $this->storage->getServiceGroupMap());
         } catch (\Exception $e) {
@@ -155,7 +155,7 @@ class PageController
         $viewTitle  = 'About';
 
         try {
-            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, false);
+            $services        = Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, false);
             $this->storage->syncServiceNames($services);
             $groupedServices = Helpers::buildGroupedServices($services, $this->storage->getServiceGroupMap());
         } catch (\Exception $e) {

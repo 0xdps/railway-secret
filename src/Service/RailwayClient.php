@@ -50,9 +50,15 @@ class RailwayClient
     }
 
     /**
-     * Fetch all services in the project
+     * Fetch services in the project that are deployed in the given environment.
+     *
+     * Railway services exist at the project level, but each service can have
+     * zero or more "service instances" per environment.  We fetch the instances
+     * alongside the service list and filter to only the services that have at
+     * least one instance in the requested environment, so installations that
+     * span multiple environments only show the services relevant to this one.
      */
-    public function getServices(string $projectId): array
+    public function getServices(string $projectId, string $environmentId): array
     {
         $query = '
         query GetServices($projectId: String!) {
@@ -62,16 +68,33 @@ class RailwayClient
                 node {
                   id
                   name
+                  serviceInstances {
+                    edges {
+                      node {
+                        environmentId
+                      }
+                    }
+                  }
                 }
               }
             }
           }
         }';
 
-        $data = $this->request($query, ['projectId' => $projectId]);
+        $data     = $this->request($query, ['projectId' => $projectId]);
         $services = [];
         foreach ($data['project']['services']['edges'] ?? [] as $edge) {
-            $services[] = $edge['node'];
+            $node  = $edge['node'];
+            $inEnv = false;
+            foreach ($node['serviceInstances']['edges'] ?? [] as $instEdge) {
+                if (($instEdge['node']['environmentId'] ?? '') === $environmentId) {
+                    $inEnv = true;
+                    break;
+                }
+            }
+            if ($inEnv) {
+                $services[] = ['id' => $node['id'], 'name' => $node['name']];
+            }
         }
         return $services;
     }
