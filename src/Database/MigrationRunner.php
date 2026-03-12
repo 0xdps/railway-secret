@@ -248,37 +248,62 @@ class MigrationRunner
                 break;
             }
         }
-        // Finalize BEFORE any DDL — un-finalized SQLite3Result objects hold open
-        // read cursors on sqlite_master; those cause SQLITE_LOCKED on schema writes.
+        // MUST finalize before any write — un-finalized cursors on sqlite_master
+        // cause SQLITE_LOCKED on schema writes even within the same connection.
         $result->finalize();
 
         if (!$needsRebuild) {
             return;
         }
 
-        // Clean up any leftover table from a previous partial run.
+        // Clean up any stale table left by a previous partially-failed run.
         $this->db->exec("DROP TABLE IF EXISTS secret_history_old");
 
-        // Run the rename-dance in autocommit (no explicit BEGIN/COMMIT).
-        // Using an explicit transaction here triggers SQLITE_LOCKED on COMMIT/DROP
-        // because PHP keeps SQLite3Result objects alive as read cursors on the
-        // schema table until GC, and SQLite refuses to commit schema changes while
-        // a read cursor from the same connection is still open on sqlite_master.
-        // Each autocommit DDL statement is still individually atomic.
-        $this->db->exec("ALTER TABLE secret_history RENAME TO secret_history_old");
-        $this->db->exec("CREATE TABLE secret_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            secret_name TEXT NOT NULL,
-            service_id TEXT,
-            secret_value TEXT,
-            new_secret_value TEXT,
-            trigger_type TEXT NOT NULL DEFAULT 'manual',
-            rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )");
-        $this->db->exec("INSERT INTO secret_history
-            SELECT id, secret_name, service_id, secret_value, new_secret_value, trigger_type, rotated_at
-            FROM secret_history_old");
-        $this->db->exec("DROP TABLE secret_history_old");
+        // All four DDL steps must be inside one transaction so the rename dance
+        // is fully atomic (all succeed or all roll back).
+        // IMPORTANT: the DROP of the old table must also be inside the same
+        // transaction — dropping it after COMMIT causes SQLITE_LOCKED because
+        // SQLite retains an internal page-cache reference to secret_history_old
+        // from the INSERT...SELECT even after the transaction commits.
+        //
+        // Note: PRAGMA locking_mode = EXCLUSIVE is intentionally NOT used —
+        // it was the original cause of SQLITE_LOCKED because it conflicts with
+        // any still-live schema cursors on the same connection.
+        // A plain BEGIN is sufficient; all cursors are finalized above.
+        $this->db->exec("BEGIN");
+        try {
+            $this->execOrFail("ALTER TABLE secret_history RENAME TO secret_history_old");
+            $this->execOrFail("CREATE TABLE secret_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                secret_name TEXT NOT NULL,
+                service_id TEXT,
+                secret_value TEXT,
+                new_secret_value TEXT,
+                trigger_type TEXT NOT NULL DEFAULT 'manual',
+                rotated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )");
+            $this->execOrFail("INSERT INTO secret_history
+                SELECT id, secret_name, service_id, secret_value, new_secret_value, trigger_type, rotated_at
+                FROM secret_history_old");
+            $this->execOrFail("DROP TABLE secret_history_old");
+            $this->db->exec("COMMIT");
+        } catch (\RuntimeException $e) {
+            $this->db->exec("ROLLBACK");
+            throw $e;
+        }
+    }
+
+    /**
+     * Execute a SQL statement or throw if it fails.
+     * SQLite3::exec() returns false on error (no exception by default).
+     */
+    private function execOrFail(string $sql): void
+    {
+        if ($this->db->exec($sql) === false) {
+            throw new \RuntimeException(
+                'SQLite exec failed (' . $this->db->lastErrorCode() . '): ' . $this->db->lastErrorMsg()
+            );
+        }
     }
 
     private function tableHasColumn(string $table, string $column): bool
