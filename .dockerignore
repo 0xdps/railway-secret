@@ -1,0 +1,20 @@
+# Development artifacts
+.env
+.env.*
+.git
+.gitignore
+.vscode
+.gemini
+*.md
+!RAILWAY_TEMPLATE.md
+
+# Local SQLite databases — never bake these into the image.
+# The container creates them fresh at runtime (writable, correct SQLite version).
+storage/db/*.sqlite
+storage/db/*.sqlite-wal
+storage/db/*.sqlite-shm
+storage/db/*.sqlite-journal
+
+# Local / test files
+/tmp
+*.log
