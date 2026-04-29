@@ -48,9 +48,9 @@ $currentSection = $section ?? 'secrets';
             Managed
         </a>
         <?php $historyHref = $serviceId ? '/?serviceId=' . urlencode((string)$serviceId) . '&section=history' : '/?section=history'; ?>
-        <a href="<?= htmlspecialchars($historyHref, ENT_QUOTES, 'UTF-8') ?>"
+        <a href="<?= h($historyHref, ENT_QUOTES, 'UTF-8') ?>"
            class="nav-link js-history-nav <?= $currentSection === 'history' ? 'active' : '' ?>"
-           hx-get="<?= htmlspecialchars($historyHref, ENT_QUOTES, 'UTF-8') ?>"
+           hx-get="<?= h($historyHref, ENT_QUOTES, 'UTF-8') ?>"
            hx-target="#mainContent"
            hx-swap="outerHTML"
            hx-push-url="true"
@@ -95,7 +95,7 @@ $currentSection = $section ?? 'secrets';
                     $isAutoBucket = in_array($groupName, $autoBuckets, true);
                 ?>
                 <div class="sidebar-group js-sidebar-group <?= $isActiveGroup ? 'is-open' : '' ?>"
-                     data-group-slug="<?= htmlspecialchars($groupSlug, ENT_QUOTES, 'UTF-8') ?>">
+                     data-group-slug="<?= h($groupSlug, ENT_QUOTES, 'UTF-8') ?>">
 
                     <!-- Group trigger row -->
                     <div class="sidebar-group-trigger">
@@ -104,14 +104,14 @@ $currentSection = $section ?? 'secrets';
                                 aria-expanded="<?= $isActiveGroup ? 'true' : 'false' ?>"
                                 title="Expand / collapse">
                             <i data-lucide="chevron-right" class="sidebar-group-chevron" style="width:12px;height:12px;"></i>
-                            <span class="sidebar-group-name"><?= htmlspecialchars($groupName) ?></span>
+                            <span class="sidebar-group-name"><?= h($groupName) ?></span>
                             <span class="sidebar-group-count"><?= count($groupItems) ?></span>
                         </button>
                         <?php if (!$isAutoBucket): ?>
                         <button type="button"
                                 class="sidebar-group-edit js-edit-group"
-                                data-group-name="<?= htmlspecialchars($groupName, ENT_QUOTES, 'UTF-8') ?>"
-                                data-service-ids="<?= htmlspecialchars($groupServiceIdsCsv, ENT_QUOTES, 'UTF-8') ?>"
+                                data-group-name="<?= h($groupName, ENT_QUOTES, 'UTF-8') ?>"
+                                data-service-ids="<?= h($groupServiceIdsCsv, ENT_QUOTES, 'UTF-8') ?>"
                                 title="Edit group">
                             <i data-lucide="pencil" style="width:10px;height:10px;"></i>
                         </button>
@@ -121,18 +121,18 @@ $currentSection = $section ?? 'secrets';
                     <!-- Collapsible service list -->
                     <nav class="sidebar-group-items">
                         <?php foreach ($groupItems as $svc): ?>
-                            <a href="/?serviceId=<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="/?serviceId=<?= h($svc['id'], ENT_QUOTES, 'UTF-8') ?>"
                                class="nav-link js-scope-nav js-grouped-service <?= ($currentSection !== 'history' && $serviceId === $svc['id']) ? 'active' : '' ?>"
                                hx-get="/?serviceId=<?= urlencode($svc['id']) ?>"
                                hx-target="#mainContent"
                                hx-swap="outerHTML"
                                hx-push-url="true"
                                hx-indicator="#mainContentLoading"
-                               data-service-id="<?= htmlspecialchars($svc['id'], ENT_QUOTES, 'UTF-8') ?>"
-                               data-service-name="<?= htmlspecialchars($svc['name'], ENT_QUOTES, 'UTF-8') ?>"
-                               data-group-name="<?= htmlspecialchars($groupName, ENT_QUOTES, 'UTF-8') ?>">
+                               data-service-id="<?= h($svc['id'], ENT_QUOTES, 'UTF-8') ?>"
+                               data-service-name="<?= h($svc['name'], ENT_QUOTES, 'UTF-8') ?>"
+                               data-group-name="<?= h($groupName, ENT_QUOTES, 'UTF-8') ?>">
                                 <i data-lucide="box" style="width:12px;height:12px;"></i>
-                                <?= htmlspecialchars($svc['name']) ?>
+                                <?= h($svc['name']) ?>
                             </a>
                         <?php endforeach; ?>
                     </nav>
@@ -159,7 +159,7 @@ $currentSection = $section ?? 'secrets';
             About
         </a>
         <form method="POST" action="/logout" style="margin:0;">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="csrf_token" value="<?= h($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" class="nav-link nav-link-btn danger">
                 <i data-lucide="log-out" style="width:14px;height:14px;"></i>
                 Logout

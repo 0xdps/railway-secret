@@ -99,11 +99,12 @@ class SessionManager
     private function cookieOptions(int $expires): array
     {
         return [
-            'expires' => $expires,
-            'path' => '/',
+            'expires'  => $expires,
+            'path'     => '/',
             'httponly' => true,
-            'secure' => $this->strictCookieMode,
-            'samesite' => $this->strictCookieMode ? 'Strict' : 'Lax',
+            'secure'   => $this->strictCookieMode,
+            // Always Strict — CSRF protection must not depend on deployment env
+            'samesite' => 'Strict',
         ];
     }
 }

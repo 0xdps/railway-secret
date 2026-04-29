@@ -31,13 +31,13 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
 <div id="mainContent" class="main-content"
      data-service-id=""
      data-section="managed"
-     data-view-title="<?= htmlspecialchars($viewTitle) ?>"
+     data-view-title="<?= h($viewTitle) ?>"
      data-cache-fetched-at="0">
 
     <!-- Page Header -->
     <div class="page-header">
         <div class="page-header-left">
-            <h1><?= htmlspecialchars($viewTitle) ?></h1>
+            <h1><?= h($viewTitle) ?></h1>
             <p>All rotation-configured secrets across every scope. <?= count($allManaged) ?> managed<?= $dueCount > 0 ? ', <strong>' . $dueCount . ' overdue</strong>' : '' ?>.</p>
         </div>
         <div class="flex items-center gap-6">
@@ -47,7 +47,7 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
                 <option value="">All groups</option>
                 <option value="__none__">No group</option>
                 <?php foreach ($syncGroupOptions as $group): ?>
-                    <option value="<?= htmlspecialchars($group, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($group) ?></option>
+                    <option value="<?= h($group, ENT_QUOTES, 'UTF-8') ?>"><?= h($group) ?></option>
                 <?php endforeach; ?>
             </select>
             <?php endif; ?>
@@ -101,24 +101,24 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
                         && strtotime((string)$row['next_rotation_at']) <= time();
                     $syncGroupValue = trim((string)($row['sync_group'] ?? ''));
                 ?>
-                    <tr class="managed-row" data-sync-group="<?= htmlspecialchars($syncGroupValue !== '' ? $syncGroupValue : '__none__', ENT_QUOTES, 'UTF-8') ?>">
+                    <tr class="managed-row" data-sync-group="<?= h($syncGroupValue !== '' ? $syncGroupValue : '__none__', ENT_QUOTES, 'UTF-8') ?>">
                         <td>
                             <div class="key-name">
                                 <i data-lucide="shield-check" class="key-icon managed" style="width:13px;height:13px;"></i>
-                                <span class="key-name-text"><?= htmlspecialchars($row['secret_name']) ?></span>
+                                <span class="key-name-text"><?= h($row['secret_name']) ?></span>
                             </div>
                             <div style="margin-top:3px;">
-                                <span class="badge badge-manual"><?= htmlspecialchars($row['service_name']) ?></span>
+                                <span class="badge badge-manual"><?= h($row['service_name']) ?></span>
                                 <?php if (!empty($row['sync_group'])): ?>
                                     <span class="badge badge-schedule" style="margin-left:4px;">
                                         <i data-lucide="link-2" style="width:10px;height:10px;"></i>
-                                        <?= htmlspecialchars((string)$row['sync_group']) ?>
+                                        <?= h((string)$row['sync_group']) ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
                         </td>
                         <td>
-                            <span class="config-text"><?= (int)$row['length'] ?> chars · <?= htmlspecialchars($row['encoding']) ?></span>
+                            <span class="config-text"><?= (int)$row['length'] ?> chars · <?= h($row['encoding']) ?></span>
                             <?php if (!$isManualOnly): ?>
                             <div style="margin-top:3px;">
                                 <span class="badge badge-schedule">
@@ -132,8 +132,8 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
                         </td>
                         <td>
                             <?php if (!empty($row['last_rotated'])): ?>
-                            <span class="js-relative-time" data-timestamp="<?= htmlspecialchars((string)$row['last_rotated'], ENT_QUOTES, 'UTF-8') ?>">
-                                <?= htmlspecialchars((string)$row['last_rotated']) ?>
+                            <span class="js-relative-time" data-timestamp="<?= h((string)$row['last_rotated'], ENT_QUOTES, 'UTF-8') ?>">
+                                <?= h((string)$row['last_rotated']) ?>
                             </span>
                             <?php else: ?>
                             <span style="color:var(--text-muted);font-size:12px;">Never</span>
@@ -160,7 +160,7 @@ sort($syncGroupOptions, SORT_NATURAL | SORT_FLAG_CASE);
                                 <button class="btn-icon js-rotate-sync-group"
                                         type="button"
                                         title="Rotate sync group"
-                                        data-sync-group="<?= htmlspecialchars((string)$row['sync_group'], ENT_QUOTES, 'UTF-8') ?>">
+                                        data-sync-group="<?= h((string)$row['sync_group'], ENT_QUOTES, 'UTF-8') ?>">
                                     <i data-lucide="link-2" style="width:13px;height:13px;"></i>
                                 </button>
                                 <?php endif; ?>

@@ -8,6 +8,15 @@ if (file_exists(__DIR__ . '/.env')) {
 }
 
 /**
+ * Escape a string for safe HTML output (ENT_QUOTES + HTML5 + UTF-8).
+ * Use this everywhere instead of bare htmlspecialchars().
+ */
+function h(string $value): string
+{
+    return htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+}
+
+/**
  * Developer / app-level links — single source of truth.
  * Update these values here; they propagate to the footer, About page, etc.
  */

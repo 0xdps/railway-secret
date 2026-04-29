@@ -22,7 +22,7 @@
         <?php if (isset($error)): ?>
             <div class="alert alert-danger" style="margin-bottom:16px;">
                 <i data-lucide="alert-circle" style="width:13px;height:13px;"></i>
-                <?= htmlspecialchars($error) ?>
+                <?= h($error) ?>
             </div>
         <?php endif; ?>
 

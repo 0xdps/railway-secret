@@ -57,7 +57,10 @@ export function openHistoryModal(secret, service, rotatedAt, oldValue, newValue,
                     : triggerType === 'sync-auto' ? 'Sync Group (auto)'
                     : isSync                       ? 'Sync Group'
                     :                               'Manual';
-        triggerEl.innerHTML = `<span class="history-trigger-badge ${badgeClass}">${label}</span>`;
+        const badge = document.createElement('span');
+        badge.className = `history-trigger-badge ${badgeClass}`;
+        badge.textContent = label;
+        triggerEl.replaceChildren(badge);
     }
 
     if (oldValueEl) {
@@ -139,7 +142,8 @@ export function initModalHandlers() {
         const okBtn   = document.getElementById('confirmationOkBtn');
 
         titleEl.textContent = title;
-        msgEl.innerHTML = message;
+        // Use textContent to prevent HTML injection from caller-supplied message strings
+        msgEl.textContent = message;
 
         const handler = () => {
             okBtn.removeEventListener('click', handler);

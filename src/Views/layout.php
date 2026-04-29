@@ -20,14 +20,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <title><?= htmlspecialchars($viewTitle) ?> — Railway Secrets</title>
+    <title><?= h($viewTitle) ?> — Railway Secrets</title>
     <link rel="stylesheet" href="/style.css">
     <script src="https://unpkg.com/lucide@0.577.0/dist/umd/lucide.js" integrity="sha384-1MrOtYSDnlvNAr6rHFMYrjwqLm+8lCPz+suIruDTmum9JoBgagrhFzxveKunHj30" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous" defer></script>
     <?php if (isset($extraHead)): echo $extraHead; endif; ?>
-    <script src="/js/<?= htmlspecialchars($pageScript) ?>"<?= $pageScript === 'app.js' ? ' type="module"' : ' defer' ?>></script>
+    <script src="/js/<?= h($pageScript) ?>"<?= $pageScript === 'app.js' ? ' type="module"' : ' defer' ?>></script>
 </head>
-<body data-current-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-csrf-token="<?= htmlspecialchars($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
+<body data-current-service-id="<?= h((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-csrf-token="<?= h($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
 <div class="app-layout">
 
     <!-- ── Sidebar ────────────────────────────────────────────────── -->
@@ -51,7 +51,7 @@
 <footer class="site-footer">
     <span class="site-footer-credit">
         Made with <span class="footer-heart">&#9829;</span> by
-        <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($dev['name'], ENT_QUOTES, 'UTF-8') ?></a>
+        <a href="<?= h($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer"><?= h($dev['name'], ENT_QUOTES, 'UTF-8') ?></a>
     </span>
     <nav class="site-footer-nav">
         <a href="/about"
@@ -60,9 +60,9 @@
            hx-target="#mainContent"
            hx-swap="outerHTML"
            hx-push-url="true">About</a>
-        <a href="<?= htmlspecialchars($repo['source'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Github ↗</a>
-        <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>
-        <a href="<?= htmlspecialchars($dev['support'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Support ↗</a>
+        <a href="<?= h($repo['source'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Github ↗</a>
+        <a href="<?= h($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>
+        <a href="<?= h($dev['support'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">Support ↗</a>
     </nav>
 </footer>
 
@@ -157,7 +157,7 @@
             </button>
         </div>
         <form id="groupModalForm">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="csrf_token" value="<?= h($csrfToken ?? '', ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="action" id="groupModalAction" value="create"><!-- create, edit, delete -->
             
             <!-- Create/Edit form -->

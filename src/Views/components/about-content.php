@@ -134,33 +134,33 @@ $repo = $appConfig['repo'];
                 <div class="about-section-eyebrow">The Developer</div>
                 <div class="about-dev-card">
                     <img
-                        src="<?= htmlspecialchars($dev['avatar'], ENT_QUOTES, 'UTF-8') ?>"
-                        alt="<?= htmlspecialchars($dev['name'], ENT_QUOTES, 'UTF-8') ?>"
+                        src="<?= h($dev['avatar'], ENT_QUOTES, 'UTF-8') ?>"
+                        alt="<?= h($dev['name'], ENT_QUOTES, 'UTF-8') ?>"
                         class="about-dev-avatar"
                         width="64"
                         height="64"
                         loading="lazy"
                     >
                     <div class="about-dev-info">
-                        <div class="about-dev-name"><?= htmlspecialchars($dev['name'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <div class="about-dev-handle"><?= htmlspecialchars($dev['handle'], ENT_QUOTES, 'UTF-8') ?></div>
-                        <p class="about-dev-bio"><?= htmlspecialchars($dev['bio'], ENT_QUOTES, 'UTF-8') ?></p>
+                        <div class="about-dev-name"><?= h($dev['name'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="about-dev-handle"><?= h($dev['handle'], ENT_QUOTES, 'UTF-8') ?></div>
+                        <p class="about-dev-bio"><?= h($dev['bio'], ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="about-dev-links">
-                            <a href="<?= htmlspecialchars($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="<?= h($dev['portfolio'], ENT_QUOTES, 'UTF-8') ?>"
                                class="about-dev-link"
                                target="_blank"
                                rel="noopener noreferrer">
                                 <i data-lucide="globe" style="width:13px;height:13px;"></i>
                                 Portfolio
                             </a>
-                            <a href="<?= htmlspecialchars($dev['github'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="<?= h($dev['github'], ENT_QUOTES, 'UTF-8') ?>"
                                class="about-dev-link"
                                target="_blank"
                                rel="noopener noreferrer">
                                 <i data-lucide="github" style="width:13px;height:13px;"></i>
                                 GitHub
                             </a>
-                            <a href="<?= htmlspecialchars($repo['source'], ENT_QUOTES, 'UTF-8') ?>"
+                            <a href="<?= h($repo['source'], ENT_QUOTES, 'UTF-8') ?>"
                                class="about-dev-link"
                                target="_blank"
                                rel="noopener noreferrer">
@@ -183,7 +183,7 @@ $repo = $appConfig['repo'];
                     </p>
                 </div>
                 <div class="about-support-grid">
-                    <a href="<?= htmlspecialchars($repo['star'], ENT_QUOTES, 'UTF-8') ?>"
+                    <a href="<?= h($repo['star'], ENT_QUOTES, 'UTF-8') ?>"
                        class="about-support-card"
                        target="_blank"
                        rel="noopener noreferrer">
@@ -197,7 +197,7 @@ $repo = $appConfig['repo'];
                         </div>
                         <div class="about-support-action">Star the repo ↗</div>
                     </a>
-                    <a href="<?= htmlspecialchars($dev['support'], ENT_QUOTES, 'UTF-8') ?>"
+                    <a href="<?= h($dev['support'], ENT_QUOTES, 'UTF-8') ?>"
                        class="about-support-card"
                        target="_blank"
                        rel="noopener noreferrer">
@@ -229,7 +229,7 @@ $repo = $appConfig['repo'];
             <div class="about-version-note">
                 <i data-lucide="terminal" style="width:12px;height:12px;"></i>
                 Railway Secrets &nbsp;·&nbsp; Open-source, self-hosted &nbsp;·&nbsp;
-                <a href="<?= htmlspecialchars($repo['license'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">MIT License</a>
+                <a href="<?= h($repo['license'], ENT_QUOTES, 'UTF-8') ?>" class="footer-link" target="_blank" rel="noopener noreferrer">MIT License</a>
             </div>
 
         </div><!-- /about-page -->

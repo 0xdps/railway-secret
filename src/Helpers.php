@@ -250,6 +250,9 @@ class Helpers
             }
             return false;
         }
+        // No explicit whitelist: trust only private/reserved-range addresses
+        // (RFC-1918, loopback, link-local, etc.) — i.e. return true when the
+        // IP is NOT a routable public address.
         return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
     }
 }

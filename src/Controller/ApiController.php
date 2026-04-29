@@ -545,13 +545,13 @@ class ApiController
 
     public function configDelete(Request $request, Response $response): Response
     {
-        $body      = [];
         parse_str((string)$request->getBody(), $parsed);
         $params    = $request->getQueryParams();
         $name      = $params['name']      ?? $parsed['name']      ?? '';
         $rawSvcId  = $params['serviceId'] ?? $parsed['serviceId'] ?? '';
         $serviceId = ($rawSvcId !== '') ? $rawSvcId : null;
-        $csrf      = $params['csrf_token'] ?? $parsed['csrf_token'] ?? null;
+        // Accept CSRF only from POST body — never from query string (prevents referrer leakage)
+        $csrf      = $parsed['csrf_token'] ?? null;
 
         try {
             if (!$this->session->validateCsrfToken($csrf)) {
