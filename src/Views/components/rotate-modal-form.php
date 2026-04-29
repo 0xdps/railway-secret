@@ -17,7 +17,7 @@ $syncGroupMembers = isset($syncGroupMembers) && is_array($syncGroupMembers) ? $s
 <div class="modal-header">
     <span class="modal-title">
         <i data-lucide="rotate-cw" style="width:13px;height:13px;margin-right:5px;vertical-align:-1px;"></i>
-        Rotate: <?= htmlspecialchars($secretName) ?>
+        Rotate: <?= h($secretName) ?>
     </span>
     <button class="modal-close js-close-config-modal" type="button">
         <i data-lucide="x" style="width:14px;height:14px;"></i>
@@ -29,9 +29,9 @@ $syncGroupMembers = isset($syncGroupMembers) && is_array($syncGroupMembers) ? $s
       hx-swap="innerHTML"
       hx-indicator="#rotateSavingIndicator">
 
-    <input type="hidden" name="name"       value="<?= htmlspecialchars($secretName) ?>">
-    <input type="hidden" name="serviceId"  value="<?= htmlspecialchars((string)$serviceId) ?>">
-    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+    <input type="hidden" name="name"       value="<?= h($secretName) ?>">
+    <input type="hidden" name="serviceId"  value="<?= h((string)$serviceId) ?>">
+    <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
     <input type="hidden" name="mode"       value="rotate_only">
 
     <p class="config-section-hint" style="margin-bottom:16px;">
@@ -43,11 +43,11 @@ $syncGroupMembers = isset($syncGroupMembers) && is_array($syncGroupMembers) ? $s
     <div style="margin-bottom:14px;border:1px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.08);border-radius:var(--radius-sm);padding:10px 12px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:6px;">Sync Group Impact</div>
         <div class="form-hint" style="margin:0 0 6px 0;color:var(--text-secondary);">
-            This key belongs to <strong><?= htmlspecialchars($syncGroupName) ?></strong>. Rotating now will also rotate:
+            This key belongs to <strong><?= h($syncGroupName) ?></strong>. Rotating now will also rotate:
         </div>
         <ul style="margin:0;padding-left:16px;color:var(--text-secondary);font-size:12px;line-height:1.5;">
             <?php foreach ($syncGroupMembers as $member): ?>
-                <li><strong><?= htmlspecialchars((string)($member['secret_name'] ?? '')) ?></strong> in <?= htmlspecialchars((string)($member['service'] ?? '')) ?></li>
+                <li><strong><?= h((string)($member['secret_name'] ?? '')) ?></strong> in <?= h((string)($member['service'] ?? '')) ?></li>
             <?php endforeach; ?>
         </ul>
     </div>

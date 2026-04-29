@@ -36,8 +36,8 @@
         <tr class="history-row js-history-row" data-history-id="<?= (int)$historyId ?>">
             <td>
                 <div class="history-entry">
-                    <span class="history-secret-name"><?= htmlspecialchars($secretName) ?></span>
-                    <span class="history-service-badge"><?= htmlspecialchars($serviceLabel) ?></span>
+                    <span class="history-secret-name"><?= h($secretName) ?></span>
+                    <span class="history-service-badge"><?= h($serviceLabel) ?></span>
                     <span class="history-trigger-badge <?= $badgeClass ?>">
                         <?= $badgeLabel ?>
                     </span>
@@ -52,7 +52,7 @@
                 </button>
             </td>
             <td>
-                <span class="history-time js-relative-time" data-timestamp="<?= htmlspecialchars($rotatedAt) ?>"><?= htmlspecialchars($rotatedAt) ?></span>
+                <span class="history-time js-relative-time" data-timestamp="<?= h($rotatedAt) ?>"><?= h($rotatedAt) ?></span>
             </td>
         </tr>
     <?php endforeach; ?>

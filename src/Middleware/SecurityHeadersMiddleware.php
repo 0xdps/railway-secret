@@ -36,7 +36,8 @@ class SecurityHeadersMiddleware implements MiddlewareInterface
                 . "frame-ancestors 'none'; "
                 . "base-uri 'self'; "
                 . "form-action 'self'; "
-                . "object-src 'none'"
+                . "object-src 'none'; "
+                . "upgrade-insecure-requests"
             );
     }
 }

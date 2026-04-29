@@ -1,4 +1,4 @@
-<div id="mainContent" class="main-content" data-service-id="<?= htmlspecialchars((string)$serviceId, ENT_QUOTES, 'UTF-8') ?>" data-section="<?= htmlspecialchars((string)($section ?? 'secrets'), ENT_QUOTES, 'UTF-8') ?>" data-view-title="<?= htmlspecialchars($viewTitle, ENT_QUOTES, 'UTF-8') ?>" data-cache-fetched-at="<?= (int)($cacheFetchedAt ?? 0) ?>">
+<div id="mainContent" class="main-content" data-service-id="<?= h((string)$serviceId, ENT_QUOTES, 'UTF-8') ?>" data-section="<?= h((string)($section ?? 'secrets'), ENT_QUOTES, 'UTF-8') ?>" data-view-title="<?= h($viewTitle, ENT_QUOTES, 'UTF-8') ?>" data-cache-fetched-at="<?= (int)($cacheFetchedAt ?? 0) ?>">
 
     <?php
         $currentSection = $section ?? 'secrets';
@@ -11,7 +11,7 @@
     <!-- Page Header -->
     <div class="page-header">
         <div class="page-header-left">
-            <h1><?= htmlspecialchars($viewTitle) ?></h1>
+            <h1><?= h($viewTitle) ?></h1>
             <p>
                 <?php if ($currentSection === 'overview'): ?>
                     System status, recent activity, and quick tips.
@@ -42,7 +42,7 @@
             <button class="btn btn-ghost btn-sm"
                     type="button"
                     id="syncCacheBtn"
-                    data-service-id="<?= htmlspecialchars((string)$serviceId, ENT_QUOTES, 'UTF-8') ?>">
+                    data-service-id="<?= h((string)$serviceId, ENT_QUOTES, 'UTF-8') ?>">
                 <i data-lucide="database-zap" style="width:13px;height:13px;"></i>
                 Sync Cache
             </button>
@@ -69,7 +69,7 @@
         <?php if (isset($error)): ?>
             <div class="alert alert-danger">
                 <i data-lucide="alert-circle" style="width:14px;height:14px;"></i>
-                <?= htmlspecialchars($error) ?>
+                <?= h($error) ?>
             </div>
         <?php endif; ?>
 

@@ -19,12 +19,12 @@ $savedSyncGroup = trim((string)($config['sync_group'] ?? ''));
 $syncGroups = isset($syncGroups) && is_array($syncGroups) ? array_values(array_unique(array_filter($syncGroups, static fn($g) => trim((string)$g) !== ''))) : [];
 $syncGroupConfigs = isset($syncGroupConfigs) && is_array($syncGroupConfigs) ? $syncGroupConfigs : [];
 $isExistingSyncGroup = $savedSyncGroup !== '' && in_array($savedSyncGroup, $syncGroups, true);
-$syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
+$syncGroupConfigsJson = h((string)json_encode($syncGroupConfigs, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8');
 ?>
 <div class="modal-header">
     <span class="modal-title">
         <i data-lucide="settings-2" style="width:13px;height:13px;margin-right:5px;vertical-align:-1px;"></i>
-        Configure: <?= htmlspecialchars($secretName) ?>
+        Configure: <?= h($secretName) ?>
     </span>
     <button class="modal-close js-close-config-modal" type="button">
         <i data-lucide="x" style="width:14px;height:14px;"></i>
@@ -36,9 +36,9 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
       hx-swap="innerHTML"
       hx-indicator="#configSavingIndicator">
 
-    <input type="hidden" name="name"       value="<?= htmlspecialchars($secretName) ?>">
-    <input type="hidden" name="serviceId"  value="<?= htmlspecialchars((string)$serviceId) ?>">
-    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+    <input type="hidden" name="name"       value="<?= h($secretName) ?>">
+    <input type="hidden" name="serviceId"  value="<?= h((string)$serviceId) ?>">
+    <input type="hidden" name="csrf_token" value="<?= h($csrfToken) ?>">
     <input type="hidden" id="syncGroupConfigsData" value="<?= $syncGroupConfigsJson ?>">
 
     <!-- ── Section 1: Sync Group ──────────────────────────────── -->
@@ -50,8 +50,8 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
         <select id="syncGroupSelect" class="form-control">
             <option value="">No sync group</option>
             <?php foreach ($syncGroups as $group): ?>
-                <option value="<?= htmlspecialchars((string)$group, ENT_QUOTES, 'UTF-8') ?>" <?= $isExistingSyncGroup && $savedSyncGroup === $group ? 'selected' : '' ?>>
-                    <?= htmlspecialchars((string)$group) ?>
+                <option value="<?= h((string)$group, ENT_QUOTES, 'UTF-8') ?>" <?= $isExistingSyncGroup && $savedSyncGroup === $group ? 'selected' : '' ?>>
+                    <?= h((string)$group) ?>
                 </option>
             <?php endforeach; ?>
             <option value="__new__" <?= (!$isExistingSyncGroup && $savedSyncGroup !== '') ? 'selected' : '' ?>>+ Create new group</option>
@@ -61,10 +61,10 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
                    id="syncGroupNewInput"
                    class="form-control"
                    maxlength="64"
-                   value="<?= htmlspecialchars(!$isExistingSyncGroup ? $savedSyncGroup : '', ENT_QUOTES, 'UTF-8') ?>"
+                   value="<?= h(!$isExistingSyncGroup ? $savedSyncGroup : '', ENT_QUOTES, 'UTF-8') ?>"
                    placeholder="e.g. primary-db-url">
         </div>
-        <input type="hidden" name="sync_group" id="syncGroupHidden" value="<?= htmlspecialchars($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="sync_group" id="syncGroupHidden" value="<?= h($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>">
         <div class="config-section-hint" style="margin-top:6px;">
             All group members share the same generated value, format, and schedule.
         </div>
@@ -97,8 +97,8 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
         </div>
         <div class="config-section-hint" style="margin-bottom:10px;">Updating policy propagates to all group members instantly.</div>
         <form hx-post="/api/sync-group-config" hx-swap="none" id="editGroupPolicyForm">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
-            <input type="hidden" name="group_name" id="editGroupPolicyName" value="<?= htmlspecialchars($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="csrf_token" value="<?= h($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="group_name" id="editGroupPolicyName" value="<?= h($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>">
             <div class="form-row" style="margin-bottom:10px;">
                 <div class="form-group">
                     <label class="form-label">Length</label>
@@ -138,8 +138,8 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
                     id="deleteGroupPolicyBtn"
                     class="btn btn-danger btn-sm"
                     style="width:100%;justify-content:center;"
-                    data-group-name="<?= htmlspecialchars($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>"
-                    data-csrf-token="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
+                    data-group-name="<?= h($savedSyncGroup, ENT_QUOTES, 'UTF-8') ?>"
+                    data-csrf-token="<?= h($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
                 <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
                 Delete Group
             </button>
@@ -224,7 +224,7 @@ $syncGroupConfigsJson = htmlspecialchars((string)json_encode($syncGroupConfigs, 
         </div>
         <button type="button"
                 class="btn btn-danger btn-sm js-delete-config"
-                data-secret-name="<?= htmlspecialchars($secretName, ENT_QUOTES, 'UTF-8') ?>"
+                data-secret-name="<?= h($secretName, ENT_QUOTES, 'UTF-8') ?>"
                 data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>">
             <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
             Remove

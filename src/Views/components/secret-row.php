@@ -15,10 +15,10 @@ $isRailway = strpos($name, 'RAILWAY_') === 0;
 $rowId = 'secret-' . md5($keyId);
 ?>
 <tr class="secret-tr" 
-    id="<?= htmlspecialchars($rowId) ?>"
+    id="<?= h($rowId) ?>"
     data-is-railway="<?= $isRailway ? '1' : '0' ?>"
     data-is-managed="<?= $isManaged ? '1' : '0' ?>"
-    data-key-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>">
+    data-key-name="<?= h($name, ENT_QUOTES, 'UTF-8') ?>">
 
     <!-- Secret Name + Value -->
     <td>
@@ -26,21 +26,21 @@ $rowId = 'secret-' . md5($keyId);
             <i data-lucide="<?= $isManaged ? 'shield-check' : 'shield-off' ?>"
                class="key-icon <?= $isManaged ? 'managed' : 'unmanaged' ?>"
                style="width:13px;height:13px;"></i>
-            <span class="key-name-text"><?= htmlspecialchars($name) ?></span>
+            <span class="key-name-text"><?= h($name) ?></span>
         </div>
         <div class="secret-row">
             <span class="secret-value"
-                  data-secret-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
-                  data-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                  data-secret-name="<?= h($name, ENT_QUOTES, 'UTF-8') ?>"
+                  data-service-id="<?= h((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                   title="Click eye to reveal">••••••••••••</span>
             <button class="btn-icon js-toggle-secret" type="button" title="Toggle visibility"
-                    data-secret-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
-                    data-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                    data-secret-name="<?= h($name, ENT_QUOTES, 'UTF-8') ?>"
+                    data-service-id="<?= h((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <i data-lucide="eye" style="width:12px;height:12px;"></i>
             </button>
             <button class="btn-icon js-copy-secret" type="button"
-                    data-secret-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
-                    data-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                    data-secret-name="<?= h($name, ENT_QUOTES, 'UTF-8') ?>"
+                    data-service-id="<?= h((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                     title="Copy">
                 <i data-lucide="copy" style="width:12px;height:12px;"></i>
             </button>
@@ -54,7 +54,7 @@ $rowId = 'secret-' . md5($keyId);
         ?>
         <?php if ($isManaged): ?>
             <div class="rotation-cell">
-                <span class="config-text"><?= (int)$config['length'] ?> chars · <?= htmlspecialchars($config['encoding']) ?></span>
+                <span class="config-text"><?= (int)$config['length'] ?> chars · <?= h($config['encoding']) ?></span>
                 <?php if ($config['interval_days'] > 0): ?>
                     <span class="badge badge-schedule">
                         <i data-lucide="clock" style="width:10px;height:10px;"></i>
@@ -91,8 +91,8 @@ $rowId = 'secret-' . md5($keyId);
             <button class="btn-icon js-rollback-btn"
                     type="button"
                     title="Rollback last rotation"
-                    data-secret-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"
-                    data-service-id="<?= htmlspecialchars((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                    data-secret-name="<?= h($name, ENT_QUOTES, 'UTF-8') ?>"
+                    data-service-id="<?= h((string)($serviceId ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <i data-lucide="undo-2" style="width:13px;height:13px;"></i>
             </button>
             <?php endif; ?>

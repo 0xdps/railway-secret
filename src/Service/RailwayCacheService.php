@@ -46,6 +46,7 @@ class RailwayCacheService
         if ($this->encryptionKey !== null) {
             $decrypted = CryptoService::decrypt($raw, $this->encryptionKey);
             if ($decrypted === null) {
+                error_log("[RailwayCacheService] Decryption failed for cache key: {$key} — discarding entry");
                 $this->delete($key);
                 return null;
             }
