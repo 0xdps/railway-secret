@@ -26,8 +26,8 @@ if (php_sapi_name() !== 'cli') {
 }
 
 try {
-    $masterKey = getRequiredEnv('MASTER_KEY');
-    $railwayToken = getRequiredEnv('RAILWAY_TOKEN');
+    $mesahubUrl = getRequiredEnv('MESAHUB_URL');
+    $masterKey  = getRequiredEnv('MASTER_KEY');
 
     // Injected automatically by Railway
     $projectId = getenv('RAILWAY_PROJECT_ID') ?: getenv('PROJECT_ID');
@@ -39,17 +39,23 @@ try {
         throw new RuntimeException('Missing required configuration: RAILWAY_ENVIRONMENT_ID or ENVIRONMENT_ID');
     }
 
-    $dbPath = __DIR__ . '/storage/db/secrets.sqlite';
+    $info   = \Mesahub\MesahubClient::parseMesahubUrl($mesahubUrl);
+    $client = new \Mesahub\MesahubClient(
+        apiKey:      $info['api_key'],
+        apiUrl:      $info['api_url'],
+        routePrefix: $info['route_prefix'],
+    );
+    $db = $client->db($info['db_name']);
 
     $cronLogger = new Logger('cron');
     $cronLogger->pushHandler(new StreamHandler(STDERR, Logger::DEBUG));
 
     $railway = new RailwayClient(
-        $railwayToken,
+        getRequiredEnv('RAILWAY_TOKEN'),
         new GuzzleClient(['timeout' => 30, 'connect_timeout' => 10]),
         $cronLogger
     );
-    $storage = new StorageService($dbPath, $masterKey);
+    $storage = new StorageService($db, $masterKey);
     $rotator = new RotatorService($railway, $storage);
     $dryRun  = filter_var(getenv('DRY_RUN') ?: 'false', FILTER_VALIDATE_BOOLEAN);
 } catch (\Throwable $e) {

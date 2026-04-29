@@ -11,6 +11,8 @@ use App\Service\RotatorService;
 use App\Service\SessionManager;
 use App\Service\StorageService;
 use GuzzleHttp\Client as GuzzleClient;
+use Mesahub\DatabaseHandle;
+use Mesahub\MesahubClient;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
 use Psr\Log\LoggerInterface;
@@ -21,6 +23,17 @@ return [
         $logger = new Logger('app');
         $logger->pushHandler(new StreamHandler('php://stderr', Logger::DEBUG));
         return $logger;
+    },
+
+    // ── Mesahub database handle (shared across all services) ─────────────────
+    DatabaseHandle::class => static function (): DatabaseHandle {
+        $info   = MesahubClient::parseMesahubUrl(Helpers::requireEnv('MESAHUB_URL'));
+        $client = new MesahubClient(
+            apiKey:      $info['api_key'],
+            apiUrl:      $info['api_url'],
+            routePrefix: $info['route_prefix'],
+        );
+        return $client->db($info['db_name']);
     },
 
     // ── Railway project context ──────────────────────────────────────────────
@@ -54,21 +67,21 @@ return [
         );
     },
 
-    RailwayCacheService::class => static function (): RailwayCacheService {
-        $masterKey    = Helpers::requireEnv('MASTER_KEY');
-        $cacheDbPath  = dirname(__DIR__) . '/storage/db/railway_cache.sqlite';
-        return new RailwayCacheService($cacheDbPath, $masterKey);
+    RailwayCacheService::class => static function (DatabaseHandle $db): RailwayCacheService {
+        $masterKey = Helpers::requireEnv('MASTER_KEY');
+        return new RailwayCacheService($db, $masterKey);
     },
 
-    StorageService::class => static function (): StorageService {
+    StorageService::class => static function (DatabaseHandle $db): StorageService {
         $masterKey = Helpers::requireEnv('MASTER_KEY');
-        $dbPath    = dirname(__DIR__) . '/storage/db/secrets.sqlite';
-        return new StorageService($dbPath, $masterKey);
+        return new StorageService($db, $masterKey);
     },
 
     RotatorService::class => static function (RailwayClient $railway, StorageService $storage): RotatorService {
         return new RotatorService($railway, $storage);
     },
 
-    LoginRateLimiter::class => static fn(): LoginRateLimiter => new LoginRateLimiter(),
+    LoginRateLimiter::class => static function (DatabaseHandle $db): LoginRateLimiter {
+        return new LoginRateLimiter($db);
+    },
 ];

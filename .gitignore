@@ -3,3 +3,5 @@
 /.vscode
 /vendor
 .env
+.env.local
+.env.prod
