@@ -2,6 +2,7 @@
     "name": "0xdps/railway-secrets",
     "description": "Railway environment secret manager",
     "type": "project",
+    "license": "MIT",
     "repositories": [
         {
             "type": "vcs",
