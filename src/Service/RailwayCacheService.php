@@ -2,23 +2,14 @@
 
 namespace App\Service;
 
-use SQLite3;
+use Mesahub\DatabaseHandle;
 
 class RailwayCacheService
 {
-    private SQLite3 $db;
-    private ?string $encryptionKey;
-
-    public function __construct(string $dbPath, ?string $encryptionKey = null)
-    {
-        $this->encryptionKey = ($encryptionKey !== '' && $encryptionKey !== null) ? $encryptionKey : null;
-        $dbDir = dirname($dbPath);
-        if (!is_dir($dbDir) && !mkdir($dbDir, 0775, true) && !is_dir($dbDir)) {
-            throw new \RuntimeException("Unable to create cache directory: {$dbDir}");
-        }
-
-        $this->db = new SQLite3($dbPath);
-        $this->db->busyTimeout(5000);
+    public function __construct(
+        private readonly DatabaseHandle $db,
+        private readonly ?string $encryptionKey = null,
+    ) {
         $this->init();
     }
 
@@ -36,10 +27,11 @@ class RailwayCacheService
 
     public function get(string $key): ?array
     {
-        $stmt = $this->db->prepare("SELECT payload_json, expires_at FROM railway_cache WHERE cache_key = :key LIMIT 1");
-        $stmt->bindValue(':key', $key, SQLITE3_TEXT);
-        $res = $stmt->execute();
-        $row = $res->fetchArray(SQLITE3_ASSOC) ?: null;
+        $result = $this->db->query(
+            "SELECT payload_json, expires_at FROM railway_cache WHERE cache_key = ? LIMIT 1",
+            [$key]
+        );
+        $row = $result->rows[0] ?? null;
 
         if (!$row) {
             return null;
@@ -54,7 +46,6 @@ class RailwayCacheService
         if ($this->encryptionKey !== null) {
             $decrypted = CryptoService::decrypt($raw, $this->encryptionKey);
             if ($decrypted === null) {
-                // Stale entry written before encryption was enabled — purge and force re-fetch.
                 $this->delete($key);
                 return null;
             }
@@ -67,10 +58,11 @@ class RailwayCacheService
 
     public function getInfo(string $key): ?array
     {
-        $stmt = $this->db->prepare("SELECT fetched_at, expires_at FROM railway_cache WHERE cache_key = :key LIMIT 1");
-        $stmt->bindValue(':key', $key, SQLITE3_TEXT);
-        $res = $stmt->execute();
-        $row = $res->fetchArray(SQLITE3_ASSOC) ?: null;
+        $result = $this->db->query(
+            "SELECT fetched_at, expires_at FROM railway_cache WHERE cache_key = ? LIMIT 1",
+            [$key]
+        );
+        $row = $result->rows[0] ?? null;
         if (!$row) {
             return null;
         }
@@ -83,8 +75,8 @@ class RailwayCacheService
 
     public function put(string $key, array $payload, int $ttlSeconds): void
     {
-        $now = time();
-        $expiresAt = $now + max(1, $ttlSeconds);
+        $now         = time();
+        $expiresAt   = $now + max(1, $ttlSeconds);
         $payloadJson = json_encode($payload);
         if (!is_string($payloadJson)) {
             throw new \RuntimeException('Unable to encode cache payload');
@@ -94,31 +86,28 @@ class RailwayCacheService
             $payloadJson = CryptoService::encrypt($payloadJson, $this->encryptionKey);
         }
 
-        $stmt = $this->db->prepare("INSERT INTO railway_cache (cache_key, payload_json, fetched_at, expires_at)
-            VALUES (:key, :payload, :fetched_at, :expires_at)
-            ON CONFLICT(cache_key) DO UPDATE SET
-                payload_json = excluded.payload_json,
-                fetched_at = excluded.fetched_at,
-                expires_at = excluded.expires_at");
-        $stmt->bindValue(':key', $key, SQLITE3_TEXT);
-        $stmt->bindValue(':payload', $payloadJson, SQLITE3_TEXT);
-        $stmt->bindValue(':fetched_at', $now, SQLITE3_INTEGER);
-        $stmt->bindValue(':expires_at', $expiresAt, SQLITE3_INTEGER);
-        $stmt->execute();
+        $this->db->exec(
+            "INSERT INTO railway_cache (cache_key, payload_json, fetched_at, expires_at)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(cache_key) DO UPDATE SET
+                 payload_json = excluded.payload_json,
+                 fetched_at   = excluded.fetched_at,
+                 expires_at   = excluded.expires_at",
+            [$key, $payloadJson, $now, $expiresAt]
+        );
     }
 
     public function delete(string $key): void
     {
-        $stmt = $this->db->prepare("DELETE FROM railway_cache WHERE cache_key = :key");
-        $stmt->bindValue(':key', $key, SQLITE3_TEXT);
-        $stmt->execute();
+        $this->db->exec("DELETE FROM railway_cache WHERE cache_key = ?", [$key]);
     }
 
     public function deletePrefix(string $prefix): void
     {
-        $stmt = $this->db->prepare("DELETE FROM railway_cache WHERE cache_key LIKE :prefix");
-        $stmt->bindValue(':prefix', $prefix . '%', SQLITE3_TEXT);
-        $stmt->execute();
+        $this->db->exec(
+            "DELETE FROM railway_cache WHERE cache_key LIKE ?",
+            [$prefix . '%']
+        );
     }
 
     public function clear(): void
