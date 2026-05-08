@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8af31215f5d99573fe21d761f8ded52e",
+    "content-hash": "69b52d95d79cc11b9537e7f413a456c4",
     "packages": [
         {
             "name": "fig/http-message-util",
@@ -513,16 +513,16 @@
         },
         {
             "name": "mesahub/client",
-            "version": "0.1.0",
+            "version": "v1.0.0",
             "source": {
                 "type": "git",
-                "url": "https://github.com/0xdps/mesahub-php.git",
-                "reference": "0d7a0d3e4ed242656bcc2e8b6ff137eb5f0ea42b"
+                "url": "https://github.com/mesahub-db/mesahub-pkg-php.git",
+                "reference": "77c397f253b45003057ccc1e4cf810df9ba911f9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/0xdps/mesahub-php/zipball/0d7a0d3e4ed242656bcc2e8b6ff137eb5f0ea42b",
-                "reference": "0d7a0d3e4ed242656bcc2e8b6ff137eb5f0ea42b",
+                "url": "https://api.github.com/repos/mesahub-db/mesahub-pkg-php/zipball/77c397f253b45003057ccc1e4cf810df9ba911f9",
+                "reference": "77c397f253b45003057ccc1e4cf810df9ba911f9",
                 "shasum": ""
             },
             "require": {
@@ -538,11 +538,7 @@
                     "Mesahub\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "Mesahub\\Tests\\": "tests/"
-                }
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -554,10 +550,10 @@
                 "sqlite"
             ],
             "support": {
-                "source": "https://github.com/0xdps/mesahub-php/tree/v0.1.0",
-                "issues": "https://github.com/0xdps/mesahub-php/issues"
+                "issues": "https://github.com/mesahub-db/mesahub-pkg-php/issues",
+                "source": "https://github.com/mesahub-db/mesahub-pkg-php/tree/v1.0.0"
             },
-            "time": "2026-04-29T07:39:34+00:00"
+            "time": "2026-05-08T13:24:21+00:00"
         },
         {
             "name": "monolog/monolog",

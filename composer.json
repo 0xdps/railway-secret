@@ -3,16 +3,10 @@
     "description": "Railway environment secret manager",
     "type": "project",
     "license": "MIT",
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/0xdps/mesahub-php.git"
-        }
-    ],
     "require": {
         "php": ">=8.2",
         "guzzlehttp/guzzle": "^7.9",
-        "mesahub/client": "^0.1.0",
+        "mesahub/client": "^1.0",
         "monolog/monolog": "^3.8",
         "php-di/slim-bridge": "^3.4",
         "slim/psr7": "^1.7",
