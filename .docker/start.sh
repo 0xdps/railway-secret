@@ -3,11 +3,9 @@ set -e
 
 PORT_TO_USE=${PORT:-8080}
 
-MESAHUB_URL="${MESAHUB_URL:-}"
-if [ -z "$MESAHUB_URL" ]; then
-  echo "✗ MESAHUB_URL is required (e.g. mh://token@host/db or mh://local/db)"
-  exit 1
-fi
+# Default to embedded mode when no MESAHUB_URL is provided
+MESAHUB_URL="${MESAHUB_URL:-mh://local/railway_secrets}"
+export MESAHUB_URL
 
 # ── [0] Mesahub: embedded or external ─────────────────────────────────────────
 # MESAHUB_URL format: mh://[token@]host[:port]/dbname
