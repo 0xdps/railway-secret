@@ -39,7 +39,6 @@ RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoload
 
 # Persistent data directory for embedded mesahub-server
 RUN mkdir -p /data
-VOLUME ["/data"]
 
 # Install crontab
 RUN crontab .docker/crontab
