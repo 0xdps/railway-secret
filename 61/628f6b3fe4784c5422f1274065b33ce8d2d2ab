@@ -1,0 +1,165 @@
+src/Service/RotatorService.php
+  s_8ae41d7eab451b::t_726b6f00d950b4 9-10,12,16,21-27,34-40,42,45,51-58,60-63,65-70,73,78-79,89-103,106,124-127,130-138,142-143,146-177,186-189,197-208,210,212,214,226-229,247,249-250,254-258,261-263,276,278-282,298,300-304,310,312-315,334,340-368
+  s_8ae41d7eab451b::t_c6452bb0172871 178-185
+  s_8ae41d7eab451b::t_5790e59f3a5773 190-196
+src/Service/WebhookNotifier.php
+  s_8ae41d7eab451b::t_39041435f0de73 1-47
+tests/run.php
+  s_8ae41d7eab451b::t_969249533f39a3 1-57
+src/Controller/ApiController.php
+  s_8ae41d7eab451b::t_2122fa7e378f3a 575-582
+  s_8ae41d7eab451b::t_c76ba57bb0f5e6 724
+  s_8ae41d7eab451b::t_8d03d60ac24e85 532-537,551-555
+  s_8ae41d7eab451b::t_248859ad5e0d8d 837-899
+  s_8ae41d7eab451b::t_983a438d9feca0 30
+  s_8ae41d7eab451b::t_8accfb2e1f7648 531,693-695
+  s_8ae41d7eab451b::t_4cd38291b99c2a 298-299,301-305
+  s_8ae41d7eab451b::t_2b28c8e3e8adac 216-217
+  s_8ae41d7eab451b::t_4e1f3defae2db2 342-344
+  s_8ae41d7eab451b::t_ed409e397a1b74 172-175
+  s_8ae41d7eab451b::t_42e64eae63a461 87-89,94-97,99-119,122-130
+  s_8ae41d7eab451b::t_59fa2bcdec25c6 281-284,288-289
+  s_8ae41d7eab451b::t_72bdd8ef9b09b0 351
+  s_8ae41d7eab451b::t_ad536c1232188d 538-539
+  s_8ae41d7eab451b::t_b5607123e7c93a 164-166
+  s_8ae41d7eab451b::t_ea023a233e0199 321-322
+  s_8ae41d7eab451b::t_fcddb8e57c36ee 9,12,16-17
+  s_8ae41d7eab451b::t_8e8f145de33034 202-204
+  s_e5a1fb969fbfc6::t_47a45c8d0de100 527-530
+public/js/modules/secrets.js
+  s_8ae41d7eab451b::t_db80be1e88aa6d 103-104
+  s_8ae41d7eab451b::t_7e8c38a79fd25e 3
+  s_8ae41d7eab451b::t_c584ab95b7c73a 59-60
+  s_8ae41d7eab451b::t_8ebda6aad9c148 25
+src/Service/StorageService.php
+  s_8ae41d7eab451b::t_a17bb078ab95f2 6
+  s_8ae41d7eab451b::t_ae9840d0d86079 449-450,455,457-458,464-465,470,472
+  s_8ae41d7eab451b::t_e0f5c30cccbf1c 202,206,209
+  s_8ae41d7eab451b::t_c099dba466f9ac 273,277,279
+  s_8ae41d7eab451b::t_1d24834556d462 433,437
+  s_8ae41d7eab451b::t_3604e6fa95f9e7 253,257,261
+  s_8ae41d7eab451b::t_0620dd39158b7a 500-539
+  s_8ae41d7eab451b::t_db979fe99db4e9 438
+  s_8ae41d7eab451b::t_2083f4f8f054b3 43-44
+  s_8ae41d7eab451b::t_115200a8332416 191,193-194,196
+  s_8ae41d7eab451b::t_29aa86b6fedb3c 225,234,241,244-245
+cron.php
+  s_8ae41d7eab451b::t_58f9daf6ace4de 184-185,189-192,194,197-199
+  s_8ae41d7eab451b::t_e4ff341842ad1f 61-63
+  s_8ae41d7eab451b::t_f11478a18778cb 169-173,176
+  s_8ae41d7eab451b::t_e79050e822f68c 7,9-10
+  s_8ae41d7eab451b::t_3e81aa3da0a5e1 156-164
+public/js/modules/modals.js
+  s_8ae41d7eab451b::t_72f6b51f0ba170 134
+  s_8ae41d7eab451b::t_486301c8ef87f7 158-218
+public/js/dashboard.js
+  s_8ae41d7eab451b::t_4cc0eee048c3b7 1278,1280-1283
+public/js/modules/groups.js
+  s_8ae41d7eab451b::t_bbeb1fdfdbff96 92,94-97
+Justfile
+  s_8ae41d7eab451b::t_047d3c4cdb0c8c 50,58,77
+src/Database/MigrationRunner.php
+  s_8ae41d7eab451b::t_0403c8bd4fc081 178-241
+  s_8ae41d7eab451b::t_d3cd2ee5a142af 256-268
+  s_8ae41d7eab451b::t_829a03246c466e 20,25
+src/Helpers.php
+  s_8ae41d7eab451b::t_0ef657119b6739 271-272
+  s_8ae41d7eab451b::t_abe2dbed14f0f6 80-104
+  s_8ae41d7eab451b::t_f1d7c045f6b651 235-244,247,251-252,255-262,266,275,278-300
+src/Service/RotationBusyException.php
+  s_8ae41d7eab451b::t_7c5a37ed443eee 1-9
+.github/workflows/publish.yml
+  s_8ae41d7eab451b::t_1e10ee85fd0c5a 82
+src/Service/SyncGroupPartialException.php
+  s_8ae41d7eab451b::t_b8a24bf83dcec2 1-13
+src/Controller/AuthController.php
+  s_8ae41d7eab451b::t_423caa8359004e 52
+  s_8ae41d7eab451b::t_9c906cdf3688eb 13
+  s_8ae41d7eab451b::t_db19f71d63fabd 64
+  s_8ae41d7eab451b::t_10b361e101e328 25
+README.md
+  s_8ae41d7eab451b::t_3e8fc7b326f23d 101-104,107
+  s_8ae41d7eab451b::t_98b100bd054114 38
+  s_8ae41d7eab451b::t_e6344f0ce3ac0e 32-36
+  s_8ae41d7eab451b::t_c80228bcd6e6e3 80
+  s_8ae41d7eab451b::t_9e2d396d032f18 42,44,46-48
+  s_8ae41d7eab451b::t_4c3c8bbb75a95f 89,92
+  s_8ae41d7eab451b::t_79f4eefa48c301 93
+src/Service/SessionManager.php
+  s_8ae41d7eab451b::t_f92981b910f220 10,13-20,23,29-30,32-44,49-50,55-56,78-96,99-103,107-132
+  s_8ae41d7eab451b::t_6c19f5a52550c1 133
+public/js/modules/history.js
+  s_8ae41d7eab451b::t_289ca639da034c 16
+  s_8ae41d7eab451b::t_88f14ebe260114 122
+  s_8ae41d7eab451b::t_47917d413915ea 140-141
+  s_8ae41d7eab451b::t_46e16c9d77e1aa 47
+  s_8ae41d7eab451b::t_40a5ae0936c8ee 74-75
+  s_8ae41d7eab451b::t_229f8395624e13 126
+  s_8ae41d7eab451b::t_83c272bb7ed81d 30-31
+  s_8ae41d7eab451b::t_89c9ab3316ca2e 3
+public/js/modules/utils.js
+  s_8ae41d7eab451b::t_f31889f848490f 72-83
+config/container.php
+  s_8ae41d7eab451b::t_ccdf2c4dec747d 87-94
+  s_8ae41d7eab451b::t_c1caafdbdda910 7,14
+  s_8ae41d7eab451b::t_080b96bfeaaf0e 57-66
+src/Views/layout.php
+  s_8ae41d7eab451b::t_89363460c5bc63 184-205
+.docker/nginx.conf
+  s_8ae41d7eab451b::t_d5cc54fd4059ce 41-42
+.github/workflows/check.yml
+  s_8ae41d7eab451b::t_67af19fed2d6bf 35-37
+  s_8ae41d7eab451b::t_06d40dfe1ac911 61
+src/Service/SyncGroupResult.php
+  s_8ae41d7eab451b::t_0e220b24f84958 1-38
+src/Service/AuthSessionStore.php
+  s_8ae41d7eab451b::t_d3e7ed70988bb6 1-88
+public/js/app.js
+  s_8ae41d7eab451b::t_1006b4d3ce3d7c 3
+  s_8ae41d7eab451b::t_9ce9be0507f315 181,185
+  s_8ae41d7eab451b::t_a1e8e23591b3f8 197-198
+  s_8ae41d7eab451b::t_35b276a70a702b 136
+  s_8ae41d7eab451b::t_daf121de4c66b9 30-52
+public/index.php
+  s_8ae41d7eab451b::t_612a37e030b83f 36
+  s_8ae41d7eab451b::t_ff8bf1ffd71347 99-100
+  s_8ae41d7eab451b::t_fd8eb56f8692ea 63-84
+Dockerfile
+  s_8ae41d7eab451b::t_2c868637d8140b 3-4,7-10
+railway.toml
+  s_8ae41d7eab451b::t_37f422956e4c89 6
+.docker/start.sh
+  s_8ae41d7eab451b::t_9b756d27a3ef92 27-45,48-50,52-56,58-65
+  s_8ae41d7eab451b::t_74332ff8d82a38 51,57
+.env.example
+  s_8ae41d7eab451b::t_8c7698c107a06b 57-60
+  s_8ae41d7eab451b::t_c0e9f2a6ebf40c 37-45
+  s_8ae41d7eab451b::t_074efa8936923c 71-72
+  s_8ae41d7eab451b::t_c8f1505eae209b 73
+src/Views/components/config-modal-form.php
+  s_8ae41d7eab451b::t_40554538d0d307 228
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "61628f6b3fe4784c5422f1274065b33ce8d2d2ab",
+  "prompts": {},
+  "sessions": {
+    "s_8ae41d7eab451b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3c975d25-aa0e-4487-84b4-6137abdaa4d7",
+        "model": "auto-smart"
+      },
+      "human_author": "Devendra Pratap <dps.manit@gmail.com>"
+    },
+    "s_e5a1fb969fbfc6": {
+      "agent_id": {
+        "tool": "github-copilot-cli",
+        "id": "4bde3749-47bc-4939-bf44-cfe440be400a",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap <dps.manit@gmail.com>"
+    }
+  }
+}
