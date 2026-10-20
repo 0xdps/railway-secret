@@ -79,6 +79,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            MESAHUB_CORE_VERSION=trunk
+            MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5
           cache-from: type=gha
           cache-to: type=gha,mode=max

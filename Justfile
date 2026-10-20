@@ -47,7 +47,7 @@ rotate:
 # Build a local amd64 image tagged as IMAGE:dev (fast, no push)
 build:
     docker build \
-        --build-arg MESAHUB_CORE_VERSION=trunk \
+        --build-arg MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5 \
         --platform linux/amd64 \
         -t {{IMAGE}}:dev \
         .
@@ -55,7 +55,7 @@ build:
 # Build multi-platform image without pushing (uses buildx)
 build-multiplatform:
     docker buildx build \
-        --build-arg MESAHUB_CORE_VERSION=trunk \
+        --build-arg MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5 \
         --platform {{PLATFORMS}} \
         -t {{IMAGE}}:dev \
         .
@@ -74,7 +74,7 @@ run-prod TAG="dev":
 publish TAG:
     @if [ -z "{{TAG}}" ]; then echo "Usage: just publish v1.2.3"; exit 1; fi
     docker buildx build \
-        --build-arg MESAHUB_CORE_VERSION=trunk \
+        --build-arg MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5 \
         --platform {{PLATFORMS}} \
         -t {{IMAGE}}:{{TAG}} \
         -t {{IMAGE}}:latest \

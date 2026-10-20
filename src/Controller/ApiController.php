@@ -6,11 +6,15 @@ namespace App\Controller;
 
 use App\Config\ProjectConfig;
 use App\Helpers;
+use App\Service\LoginRateLimiter;
 use App\Service\RailwayCacheService;
 use App\Service\RailwayClient;
+use App\Service\RotationBusyException;
 use App\Service\RotatorService;
 use App\Service\SessionManager;
 use App\Service\StorageService;
+use App\Service\SyncGroupPartialException;
+use App\Service\SyncGroupResult;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
@@ -23,6 +27,7 @@ class ApiController
         private readonly StorageService      $storage,
         private readonly RotatorService      $rotator,
         private readonly SessionManager      $session,
+        private readonly LoginRateLimiter    $rateLimiter,
         private readonly ProjectConfig       $projectConfig,
         private readonly LoggerInterface     $logger,
     ) {}
@@ -79,39 +84,51 @@ class ApiController
             if (!$this->session->validateCsrfToken($body['csrf_token'] ?? null)) {
                 throw new \InvalidArgumentException('Invalid CSRF token');
             }
+            if ($denied = $this->stepUpDenied($response)) {
+                return $denied;
+            }
             if (!Helpers::isValidSecretName($keyName)) {
                 throw new \InvalidArgumentException('Invalid secret name');
             }
 
-            $currentVars  = $this->railway->getVariables($this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
-            $currentValue = $currentVars[$keyName] ?? null;
-
-            if ($historyId > 0) {
-                $detail = $this->storage->getHistoryDetailById($historyId);
-                if ($detail === null || ($detail['secret_name'] ?? '') !== $keyName) {
-                    throw new \InvalidArgumentException('History entry not found');
-                }
-                $restoredValue = $detail['old_value'] ?? null;
-                if ($restoredValue === null || $restoredValue === '') {
-                    throw new \RuntimeException('No recoverable value in that history entry');
-                }
-                $success = $this->railway->upsertVariable($this->projectConfig->projectId, $this->projectConfig->environmentId, $keyName, $restoredValue, $serviceId);
-            } else {
-                $history = $this->storage->getHistory($keyName, $serviceId);
-                if (empty($history)) {
-                    throw new \RuntimeException('No history found for this secret');
-                }
-                $restoredValue = $history[0]['secret_value'];
-                $success       = $this->railway->upsertVariable($this->projectConfig->projectId, $this->projectConfig->environmentId, $keyName, $restoredValue, $serviceId);
+            $lockOwner = bin2hex(random_bytes(16));
+            if (!$this->storage->tryAcquireRotationLock($lockOwner)) {
+                return Helpers::apiJson($response, 409, ['success' => false, 'error' => 'A rotation is already in progress']);
             }
 
-            if ($success) {
-                $this->storage->addHistory($keyName, $currentValue, $serviceId, 'rollback');
-                $this->storage->updateLatestHistoryNewValue($keyName, $serviceId, $restoredValue);
-                Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
-                return Helpers::apiJson($response, 200, ['success' => true]);
+            try {
+                $currentVars  = $this->railway->getVariables($this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
+                $currentValue = $currentVars[$keyName] ?? null;
+
+                if ($historyId > 0) {
+                    $detail = $this->storage->getHistoryDetailById($historyId);
+                    if ($detail === null || ($detail['secret_name'] ?? '') !== $keyName) {
+                        throw new \InvalidArgumentException('History entry not found');
+                    }
+                    $restoredValue = $detail['old_value'] ?? null;
+                    if ($restoredValue === null || $restoredValue === '') {
+                        throw new \RuntimeException('No recoverable value in that history entry');
+                    }
+                    $success = $this->railway->upsertVariable($this->projectConfig->projectId, $this->projectConfig->environmentId, $keyName, $restoredValue, $serviceId);
+                } else {
+                    $history = $this->storage->getHistory($keyName, $serviceId);
+                    if (empty($history)) {
+                        throw new \RuntimeException('No history found for this secret');
+                    }
+                    $restoredValue = $history[0]['secret_value'];
+                    $success       = $this->railway->upsertVariable($this->projectConfig->projectId, $this->projectConfig->environmentId, $keyName, $restoredValue, $serviceId);
+                }
+
+                if ($success) {
+                    $this->storage->addHistory($keyName, $currentValue, $serviceId, 'rollback');
+                    $this->storage->updateLatestHistoryNewValue($keyName, $serviceId, $restoredValue);
+                    Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
+                    return Helpers::apiJson($response, 200, ['success' => true]);
+                }
+                return Helpers::apiJson($response, 500, ['success' => false, 'error' => 'Rollback failed']);
+            } finally {
+                $this->storage->releaseRotationLock($lockOwner);
             }
-            return Helpers::apiJson($response, 500, ['success' => false, 'error' => 'Rollback failed']);
         } catch (\InvalidArgumentException $e) {
             return Helpers::apiJson($response, 400, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\Exception $e) {
@@ -144,11 +161,18 @@ class ApiController
             if ($manualValue !== null && strlen($manualValue) > 4096) {
                 throw new \InvalidArgumentException('Manual value is too large');
             }
+            if ($manualValue !== null && ($denied = $this->stepUpDenied($response))) {
+                return $denied;
+            }
             if ($this->rotator->rotate($keyName, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId, $manualValue, $length, $encoding)) {
                 Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
                 return Helpers::apiJson($response, 200, ['success' => true]);
             }
             return Helpers::apiJson($response, 500, ['success' => false, 'error' => 'Rotation failed']);
+        } catch (RotationBusyException $e) {
+            return Helpers::apiJson($response, 409, ['success' => false, 'error' => $e->getMessage()]);
+        } catch (SyncGroupPartialException $e) {
+            return $this->syncGroupFailure($response, $e->result);
         } catch (\InvalidArgumentException $e) {
             return Helpers::apiJson($response, 400, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\Exception $e) {
@@ -175,8 +199,9 @@ class ApiController
             if (empty($members)) {
                 throw new \InvalidArgumentException('Sync group has no members');
             }
-            if (!$this->rotator->rotateSyncGroup($groupName, $this->projectConfig->projectId, $this->projectConfig->environmentId, null, 'sync-manual')) {
-                return Helpers::apiJson($response, 500, ['success' => false, 'error' => 'Sync group rotation failed']);
+            $result = $this->rotator->rotateSyncGroup($groupName, $this->projectConfig->projectId, $this->projectConfig->environmentId, null, 'sync-manual');
+            if (!$result->ok) {
+                return $this->syncGroupFailure($response, $result);
             }
             $scopeSeen = [];
             foreach ($members as $member) {
@@ -188,6 +213,8 @@ class ApiController
                 Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $scope === '__global__' ? null : $scope);
             }
             return Helpers::apiJson($response, 200, ['success' => true, 'rotated' => count($members), 'group' => $groupName]);
+        } catch (RotationBusyException $e) {
+            return Helpers::apiJson($response, 409, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\InvalidArgumentException $e) {
             return Helpers::apiJson($response, 400, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\Exception $e) {
@@ -251,20 +278,15 @@ class ApiController
 
             if (!empty($dueSecrets)) {
                 $results = $this->rotator->rotateBatch($dueSecrets, $this->projectConfig->projectId, $this->projectConfig->environmentId);
-                foreach ($results as $name => $result) {
-                    if ($result === 'success') {
-                        $svcId = null;
-                        foreach ($dueSecrets as $item) {
-                            if ($item['secret_name'] === $name) {
-                                $svcId = $item['service_id'] ?: null;
-                                break;
-                            }
-                        }
+                foreach ($results as $item) {
+                    $name = (string)($item['secret_name'] ?? '');
+                    $svcId = (($item['service_id'] ?? '') !== '' && $item['service_id'] !== null) ? (string)$item['service_id'] : null;
+                    if (($item['result'] ?? '') === 'success') {
                         Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $svcId);
                         $rotated++;
                     } else {
-                        $errors[] = $name;
-                        $this->logger->error('Rotate all due error', ['secret' => $name, 'result' => $result]);
+                        $errors[] = ($svcId ?: 'global') . ':' . $name;
+                        $this->logger->error('Rotate all due error', ['secret' => $name, 'service_id' => $svcId, 'result' => $item['result'] ?? '']);
                     }
                 }
             }
@@ -273,10 +295,14 @@ class ApiController
                 if (empty($groupData['due'])) {
                     continue;
                 }
-                $success = $this->rotator->rotateSyncGroup($groupName, $this->projectConfig->projectId, $this->projectConfig->environmentId, null, 'auto');
-                if (!$success) {
+                $groupResult = $this->rotator->rotateSyncGroup($groupName, $this->projectConfig->projectId, $this->projectConfig->environmentId, null, 'auto');
+                if (!$groupResult->ok) {
                     $errors[] = 'group:' . $groupName;
-                    $this->logger->error('Rotate all due sync-group error', ['group' => $groupName]);
+                    $this->logger->error('Rotate all due sync-group error', [
+                        'group'   => $groupName,
+                        'partial' => $groupResult->partial,
+                        'failed'  => $groupResult->failed,
+                    ]);
                     continue;
                 }
                 $uniqueScopes = [];
@@ -292,6 +318,8 @@ class ApiController
 
             $message = "{$rotated} secret" . ($rotated === 1 ? '' : 's') . ' rotated';
             return Helpers::apiJson($response, 200, ['success' => true, 'rotated' => $rotated, 'errors' => $errors, 'message' => $message]);
+        } catch (RotationBusyException $e) {
+            return Helpers::apiJson($response, 409, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\InvalidArgumentException $e) {
             return Helpers::apiJson($response, 400, ['success' => false, 'error' => $e->getMessage()]);
         } catch (\Exception $e) {
@@ -311,12 +339,16 @@ class ApiController
         if (!Helpers::isValidSecretName($secretName)) {
             return Helpers::apiJson($response, 400, ['success' => false, 'error' => 'Invalid secret name']);
         }
+        if ($denied = $this->stepUpDenied($response)) {
+            return $denied;
+        }
 
         try {
             $variables = $this->railway->getVariables($this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
             if (!array_key_exists($secretName, $variables)) {
                 return Helpers::apiJson($response, 404, ['success' => false, 'error' => 'Secret not found']);
             }
+            $this->storage->addAudit('reveal', $secretName . ' scope=' . ($serviceId ?: 'global'));
             return Helpers::apiJson($response, 200, ['success' => true, 'value' => $variables[$secretName]]);
         } catch (\Exception $e) {
             $this->logger->error('Secret value API error', ['error' => $e->getMessage()]);
@@ -492,6 +524,19 @@ class ApiController
             $interval    = max(0, (int)($body['interval'] ?? 0));
             $intervalUnit = Helpers::normalizeUnit($body['interval_unit'] ?? null);
 
+            $manualValue = isset($body['manual_value']) ? trim((string)$body['manual_value']) : null;
+            $manualValue = ($manualValue === '') ? null : $manualValue;
+            if ($manualValue !== null && strlen($manualValue) > 4096) {
+                throw new \InvalidArgumentException('Manual value is too large');
+            }
+            if ($manualValue !== null && ($mode === 'rotate_only' || $mode === 'save_and_rotate') && !$this->session->hasStepUp()) {
+                $response->getBody()->write('Confirm your admin key before setting a manual value');
+                return $response
+                    ->withStatus(403)
+                    ->withHeader('X-Step-Up', 'required')
+                    ->withHeader('Content-Type', 'text/html; charset=utf-8');
+            }
+
             if ($mode === 'save_only' || $mode === 'save_and_rotate') {
                 $this->storage->saveConfig($name, $serviceId, [
                     'length'        => $length ?? 32,
@@ -502,14 +547,12 @@ class ApiController
                 ]);
             }
 
-            $manualValue = isset($body['manual_value']) ? trim((string)$body['manual_value']) : null;
-            $manualValue = ($manualValue === '') ? null : $manualValue;
-            if ($manualValue !== null && strlen($manualValue) > 4096) {
-                throw new \InvalidArgumentException('Manual value is too large');
-            }
-
             if ($mode === 'rotate_only' || $mode === 'save_and_rotate') {
-                $this->rotator->rotate($name, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId, $manualValue, $length, $encoding);
+                if (!$this->rotator->rotate($name, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId, $manualValue, $length, $encoding)) {
+                    $response = $response->withStatus(500)->withHeader('HX-Trigger', (string)json_encode(['rotatorToast' => ['message' => 'Rotation failed', 'type' => 'error']]));
+                    $response->getBody()->write('Rotation failed');
+                    return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
+                }
                 Helpers::invalidateVariableCache($this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, $serviceId);
             }
 
@@ -528,6 +571,14 @@ class ApiController
             ob_start();
             include dirname(__DIR__) . '/Views/components/secrets-table-body.php';
             $response->getBody()->write((string)ob_get_clean());
+            return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
+        } catch (RotationBusyException $e) {
+            $response = $response->withStatus(409)->withHeader('HX-Trigger', (string)json_encode(['rotatorToast' => ['message' => $e->getMessage(), 'type' => 'error']]));
+            $response->getBody()->write($e->getMessage());
+            return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
+        } catch (SyncGroupPartialException $e) {
+            $response = $response->withStatus(409)->withHeader('HX-Trigger', (string)json_encode(['rotatorToast' => ['message' => $e->getMessage(), 'type' => 'error']]));
+            $response->getBody()->write($e->getMessage());
             return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
         } catch (\InvalidArgumentException $e) {
             $response = $response->withStatus(400)->withHeader('HX-Trigger', (string)json_encode(['rotatorToast' => ['message' => $e->getMessage(), 'type' => 'error']]));
@@ -639,6 +690,9 @@ class ApiController
             if ($historyId <= 0) {
                 throw new \InvalidArgumentException('Invalid history id');
             }
+            if ($denied = $this->stepUpDenied($response)) {
+                return $denied;
+            }
             $detail = $this->storage->getHistoryDetailById($historyId);
             if ($detail === null) {
                 return Helpers::apiJson($response, 404, ['success' => false, 'error' => 'History entry not found']);
@@ -667,6 +721,7 @@ class ApiController
                 }
             }
 
+            $this->storage->addAudit('reveal_history', (string)$detail['secret_name'] . ' id=' . (int)$detail['id']);
             return Helpers::apiJson($response, 200, [
                 'success' => true,
                 'data'    => [
@@ -778,5 +833,68 @@ class ApiController
             $this->logger->error('Bulk service group API error', ['error' => $e->getMessage()]);
             return Helpers::apiJson($response, 500, ['success' => false, 'error' => 'Internal server error']);
         }
+    }
+
+    public function stepUpStatus(Request $request, Response $response): Response
+    {
+        return Helpers::apiJson($response, 200, [
+            'success' => true,
+            'active'  => $this->session->hasStepUp(),
+        ]);
+    }
+
+    public function stepUp(Request $request, Response $response): Response
+    {
+        $body = (array)($request->getParsedBody() ?? []);
+        if (!$this->session->validateCsrfToken($body['csrf_token'] ?? null)) {
+            return Helpers::apiJson($response, 403, ['success' => false, 'error' => 'Invalid CSRF token']);
+        }
+
+        $ip   = Helpers::getClientIp();
+        $rate = $this->rateLimiter->isAllowed($ip);
+        if (!$rate['allowed']) {
+            $wait = max(1, (int)$rate['retry_after']);
+            return Helpers::apiJson($response, 429, ['success' => false, 'error' => "Too many attempts. Try again in {$wait}s."]);
+        }
+
+        $key = (string)($body['key'] ?? '');
+        if (!$this->session->stepUp($key)) {
+            $this->rateLimiter->recordFailure($ip, time());
+            $this->storage->addAudit('step_up_failure', $ip);
+            return Helpers::apiJson($response, 401, ['success' => false, 'error' => 'Invalid admin key']);
+        }
+
+        $this->rateLimiter->clearFailure($ip);
+        $this->storage->addAudit('step_up', $ip);
+        return Helpers::apiJson($response, 200, [
+            'success'    => true,
+            'active'     => true,
+            'expires_in' => SessionManager::STEP_UP_TTL,
+        ]);
+    }
+
+    private function stepUpDenied(Response $response): ?Response
+    {
+        if ($this->session->hasStepUp()) {
+            return null;
+        }
+        return Helpers::apiJson($response, 403, [
+            'success' => false,
+            'code'    => 'step_up_required',
+            'error'   => 'Confirm your admin key to view or restore secret values',
+        ])->withHeader('X-Step-Up', 'required');
+    }
+
+    private function syncGroupFailure(Response $response, SyncGroupResult $result): Response
+    {
+        $status = $result->partial ? 409 : 500;
+        return Helpers::apiJson($response, $status, [
+            'success'  => false,
+            'partial'  => $result->partial,
+            'error'    => $result->summary(),
+            'updated'  => $result->updated,
+            'failed'   => $result->failed,
+            'restored' => $result->restored,
+        ]);
     }
 }

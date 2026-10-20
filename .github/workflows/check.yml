@@ -32,6 +32,9 @@ jobs:
       - name: Check PHP syntax (src + public)
         run: find src public bootstrap.php cron.php config -name "*.php" -print0 | xargs -0 -n1 php -l
 
+      - name: Run unit checks
+        run: php tests/run.php
+
   build-docker:
     name: Build Docker image
     runs-on: ubuntu-latest
@@ -55,6 +58,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: false
           build-args: |
-            MESAHUB_CORE_VERSION=trunk
+            MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5
           cache-from: type=gha
           cache-to: type=gha,mode=max

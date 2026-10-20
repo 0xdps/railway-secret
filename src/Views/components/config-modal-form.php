@@ -225,7 +225,7 @@ $syncGroupConfigsJson = h((string)json_encode($syncGroupConfigs, JSON_HEX_TAG | 
         <button type="button"
                 class="btn btn-danger btn-sm js-delete-config"
                 data-secret-name="<?= h($secretName, ENT_QUOTES, 'UTF-8') ?>"
-                data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>&csrf_token=<?= urlencode($csrfToken) ?>">
+                data-delete-url="/api/config?name=<?= urlencode($secretName) ?>&serviceId=<?= urlencode((string)($serviceId ?? '')) ?>">
             <i data-lucide="trash-2" style="width:12px;height:12px;"></i>
             Remove
         </button>

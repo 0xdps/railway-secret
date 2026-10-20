@@ -17,12 +17,12 @@ use Mesahub\DatabaseHandle;
  *   1. Add its version number to the MIGRATIONS constant.
  *   2. Add a private `migrationNNN()` method with the SQL / PHP logic.
  *
- * Current schema version: 4
+ * Current schema version: 5
  */
 class MigrationRunner
 {
     /** Ordered list of all known migration version numbers. */
-    private const MIGRATIONS = [1, 2, 3, 4];
+    private const MIGRATIONS = [1, 2, 3, 4, 5];
 
     public function __construct(private readonly DatabaseHandle $db) {}
 
@@ -175,6 +175,70 @@ class MigrationRunner
         }
     }
 
+    /**
+     * Migration 005 — Global scope uses '' so the primary key is unique,
+     * plus rotation lock and audit tables.
+     */
+    private function migration005(): void
+    {
+        $this->db->exec("UPDATE secret_history SET service_id = '' WHERE service_id IS NULL");
+
+        $this->db->exec("CREATE TABLE IF NOT EXISTS managed_secrets_v5 (
+            secret_name TEXT NOT NULL,
+            service_id TEXT NOT NULL DEFAULT '',
+            length INTEGER DEFAULT 32,
+            encoding TEXT DEFAULT 'hex',
+            sync_group TEXT,
+            interval_days INTEGER DEFAULT 30,
+            interval_unit TEXT NOT NULL DEFAULT 'day',
+            last_rotated DATETIME,
+            created_at DATETIME,
+            next_rotation_at DATETIME,
+            PRIMARY KEY (secret_name, service_id)
+        )");
+
+        if ($this->tableExists('managed_secrets')) {
+            $oldCount = (int)($this->db->query("SELECT COUNT(*) AS cnt FROM managed_secrets")->rows[0]['cnt'] ?? 0);
+            $this->db->exec("
+                INSERT OR IGNORE INTO managed_secrets_v5
+                    (secret_name, service_id, length, encoding, sync_group, interval_days, interval_unit, last_rotated, created_at, next_rotation_at)
+                SELECT secret_name,
+                       COALESCE(service_id, ''),
+                       length,
+                       encoding,
+                       sync_group,
+                       interval_days,
+                       interval_unit,
+                       last_rotated,
+                       created_at,
+                       next_rotation_at
+                FROM managed_secrets
+            ");
+            $newCount = (int)($this->db->query("SELECT COUNT(*) AS cnt FROM managed_secrets_v5")->rows[0]['cnt'] ?? 0);
+            if ($newCount === 0 && $oldCount > 0) {
+                throw new \RuntimeException('Refusing to replace managed_secrets with an empty table');
+            }
+            $this->db->exec("DROP TABLE managed_secrets");
+        }
+
+        if (!$this->tableExists('managed_secrets') && $this->tableExists('managed_secrets_v5')) {
+            $this->db->exec("ALTER TABLE managed_secrets_v5 RENAME TO managed_secrets");
+        }
+
+        $this->db->exec("CREATE TABLE IF NOT EXISTS rotation_locks (
+            id INTEGER PRIMARY KEY,
+            owner TEXT NOT NULL,
+            expires_at INTEGER NOT NULL
+        )");
+
+        $this->db->exec("CREATE TABLE IF NOT EXISTS audit_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event TEXT NOT NULL,
+            detail TEXT NOT NULL DEFAULT '',
+            created_at INTEGER NOT NULL
+        )");
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -188,5 +252,18 @@ class MigrationRunner
             }
         }
         return false;
+    }
+
+    private function tableExists(string $table): bool
+    {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', $table)) {
+            return false;
+        }
+        try {
+            $this->db->query("SELECT 1 FROM {$table} LIMIT 1");
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 }

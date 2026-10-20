@@ -69,3 +69,15 @@ export function applyRelativeTimes() {
         el.title = raw;
     });
 }
+
+export async function ensureStepUp() {
+    const status = await fetch('/api/step-up');
+    const data = await status.json().catch(() => ({}));
+    if (status.ok && data.active) {
+        return;
+    }
+    if (typeof window.promptStepUp !== 'function') {
+        throw new Error('Admin key confirmation is unavailable');
+    }
+    await window.promptStepUp();
+}

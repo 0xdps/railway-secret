@@ -4,8 +4,10 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/bootstrap.php';
 
 use App\Service\RailwayClient;
-use App\Service\StorageService;
+use App\Service\RotationBusyException;
 use App\Service\RotatorService;
+use App\Service\StorageService;
+use App\Service\WebhookNotifier;
 use GuzzleHttp\Client as GuzzleClient;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
@@ -56,7 +58,9 @@ try {
         $cronLogger
     );
     $storage = new StorageService($db, $masterKey);
-    $rotator = new RotatorService($railway, $storage);
+    $webhookUrl = getenv('ROTATION_WEBHOOK_URL');
+    $webhookUrl = ($webhookUrl === false || trim((string)$webhookUrl) === '') ? null : trim((string)$webhookUrl);
+    $rotator = new RotatorService($railway, $storage, new WebhookNotifier($webhookUrl));
     $dryRun  = filter_var(getenv('DRY_RUN') ?: 'false', FILTER_VALIDATE_BOOLEAN);
 } catch (\Throwable $e) {
     fwrite(STDERR, 'Configuration error: ' . $e->getMessage() . "\n");
@@ -149,19 +153,27 @@ if ($dryRun) {
 }
 
 // Pass 2a — rotate standalone secrets (one Railway call per scope)
-$results = !empty($dueSecrets)
-    ? $rotator->rotateBatch($dueSecrets, $projectId, $environmentId)
-    : [];
+try {
+    $results = !empty($dueSecrets)
+        ? $rotator->rotateBatch($dueSecrets, $projectId, $environmentId)
+        : [];
+} catch (RotationBusyException $e) {
+    echo "  BUSY   " . $e->getMessage() . "\n";
+    echo "Done.\n";
+    exit(0);
+}
 
 $totalOk  = 0;
 $totalErr = 0;
 
-foreach ($results as $name => $result) {
-    if ($result === 'success') {
-        echo "  OK     {$name}\n";
+foreach ($results as $item) {
+    $name = (string)($item['secret_name'] ?? '');
+    $scope = (($item['service_id'] ?? '') !== '' && $item['service_id'] !== null) ? (string)$item['service_id'] : 'global';
+    if (($item['result'] ?? '') === 'success') {
+        echo "  OK     {$name} ({$scope})\n";
         $totalOk++;
     } else {
-        echo "  ERROR  {$name}: {$result}\n";
+        echo "  ERROR  {$name} ({$scope}): {$item['result']}\n";
         $totalErr++;
     }
 }
@@ -169,15 +181,22 @@ foreach ($results as $name => $result) {
 // Pass 2b — rotate each due sync group with a single shared value
 foreach (array_keys($dueSyncGroups) as $groupName) {
     try {
-        $ok = $rotator->rotateSyncGroup($groupName, $projectId, $environmentId, null, 'sync-auto');
-        if ($ok) {
+        $result = $rotator->rotateSyncGroup($groupName, $projectId, $environmentId, null, 'sync-auto');
+        if ($result->ok) {
             $members = $storage->getSyncGroupMembers($groupName);
             echo "  OK     sync-group [{$groupName}] (" . count($members) . " members)\n";
             $totalOk += count($members);
+        } elseif ($result->partial) {
+            echo "  PARTIAL sync-group [{$groupName}]: restored " . implode(',', $result->restored)
+                . "; still updated " . implode(',', $result->updated) . "\n";
+            $totalErr++;
         } else {
-            echo "  ERROR  sync-group [{$groupName}]: rotation returned false\n";
+            echo "  ERROR  sync-group [{$groupName}]: rotation failed\n";
             $totalErr++;
         }
+    } catch (RotationBusyException $e) {
+        echo "  BUSY   sync-group [{$groupName}]: " . $e->getMessage() . "\n";
+        $totalErr++;
     } catch (\Throwable $e) {
         echo "  ERROR  sync-group [{$groupName}]: " . $e->getMessage() . "\n";
         $totalErr++;

@@ -181,7 +181,28 @@
     </div>
 </div>
 
-
+<div class="modal-overlay" id="stepUpModal">
+    <div class="modal-box" style="max-width:380px;">
+        <div class="modal-header">
+            <span class="modal-title">Confirm admin key</span>
+            <button class="modal-close js-close-step-up" type="button">
+                <i data-lucide="x" style="width:14px;height:14px;"></i>
+            </button>
+        </div>
+        <form id="stepUpForm">
+            <p class="form-hint" style="margin-top:0;">Enter the admin key to view, copy, or restore a secret. This confirmation lasts 5 minutes.</p>
+            <div class="form-group">
+                <label class="form-label" for="stepUpKey">Admin key</label>
+                <input type="password" id="stepUpKey" class="form-control" autocomplete="current-password" required>
+            </div>
+            <div id="stepUpError" class="form-hint" style="color:var(--danger);min-height:1em;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-ghost btn-md js-close-step-up" style="flex:1;">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-md" style="flex:1;">Confirm</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 </body>
 </html>

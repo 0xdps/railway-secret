@@ -1,6 +1,6 @@
 // History modal population, live value fetch, copy, and rollback
 
-import { showToast, refreshIcons, getCsrfToken } from './utils.js';
+import { showToast, refreshIcons, getCsrfToken, ensureStepUp } from './utils.js';
 import { openHistoryModal }                       from './modals.js';
 
 export function initHistoryHandlers() {
@@ -13,6 +13,7 @@ export function initHistoryHandlers() {
         if (!historyId) { showToast('Missing history entry id', 'error'); return; }
 
         try {
+            await ensureStepUp();
             const response = await fetch(`/api/rotation-history-detail?id=${encodeURIComponent(historyId)}`);
             const payload  = await response.json();
             if (!response.ok || !payload.success || !payload.data) {
@@ -26,8 +27,8 @@ export function initHistoryHandlers() {
                 !!d.new_value_is_live, d.trigger_type || 'manual',
                 d.id, d.service_id || ''
             );
-        } catch {
-            showToast('Unable to load history values', 'error');
+        } catch (err) {
+            showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Unable to load history values', 'error');
         }
     });
 
@@ -43,6 +44,7 @@ export function initHistoryHandlers() {
         btn.textContent = 'Fetching…';
 
         try {
+            await ensureStepUp();
             const response = await fetch(`/api/rotation-history-detail?id=${encodeURIComponent(historyId)}&fetch_live=1`);
             const payload  = await response.json();
             if (!response.ok || !payload.success || !payload.data) {
@@ -69,8 +71,8 @@ export function initHistoryHandlers() {
                     btn.textContent = 'Show current value';
                 }
             }
-        } catch {
-            showToast('Unable to fetch live value', 'error');
+        } catch (err) {
+            showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Unable to fetch live value', 'error');
             btn.disabled = false;
             btn.textContent = 'Show current value';
         }
@@ -117,10 +119,11 @@ export function initHistoryHandlers() {
 
         window.confirmDialog(
             'Rollback secret',
-            `Restore <strong>${secretName}</strong> to the value it held <em>before</em> this rotation? This will trigger a Railway redeploy.`,
+            `Restore ${secretName} to the value it held before this rotation? This will trigger a Railway redeploy.`,
             async () => {
                 btn.disabled = true;
                 try {
+                    await ensureStepUp();
                     const fd = new FormData();
                     fd.append('key',        secretName);
                     fd.append('serviceId',  serviceId);
@@ -134,8 +137,8 @@ export function initHistoryHandlers() {
                         showToast(`${secretName} rolled back`, 'success');
                         document.getElementById('historyModal')?.classList.remove('open');
                     }
-                } catch {
-                    showToast('Rollback failed', 'error');
+                } catch (err) {
+                    showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Rollback failed', 'error');
                 } finally {
                     btn.disabled = false;
                 }

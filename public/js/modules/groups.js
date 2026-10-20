@@ -89,7 +89,12 @@ export function initGroupHandlers() {
                     const response = await fetch(deleteUrl, {
                         method: 'DELETE',
                         headers: { 'HX-Request': 'true' },
+                        body: new URLSearchParams({ csrf_token: getCsrfToken() }),
                     });
+                    if (!response.ok) {
+                        showToast('Unable to remove config', 'error');
+                        return;
+                    }
                     const html = await response.text();
                     const secretsTable = document.getElementById('secrets-table-body');
                     if (secretsTable) {

@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Database\MigrationRunner;
+use App\Helpers;
 use Mesahub\DatabaseHandle;
 
 class StorageService
@@ -39,15 +40,8 @@ class StorageService
 
         $intervalDays = (int)($config['interval_days'] ?? 0);
         $intervalUnit = $config['interval_unit'] ?? 'day';
-        $divisorMap   = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
-        $intervalSecs = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
-        if ($intervalSecs > 0) {
-            $now         = time();
-            $bucketStart = (int)(floor($now / $intervalSecs) * $intervalSecs);
-            $nextAt      = gmdate('Y-m-d H:i:s', $bucketStart + $intervalSecs);
-        } else {
-            $nextAt = null;
-        }
+        $serviceId    = $this->scopeId($serviceId);
+        $nextAt       = Helpers::nextRotationAt($intervalDays, $intervalUnit);
 
         $this->db->exec("
             INSERT INTO managed_secrets
@@ -194,22 +188,25 @@ class StorageService
 
     public function deleteConfig(string $name, ?string $serviceId): bool
     {
+        $serviceId = $this->scopeId($serviceId);
         $this->db->exec(
-            "DELETE FROM managed_secrets WHERE secret_name = ? AND (service_id = ? OR (? IS NULL AND service_id IS NULL))",
-            [$name, $serviceId, $serviceId]
+            "DELETE FROM managed_secrets WHERE secret_name = ? AND service_id = ?",
+            [$name, $serviceId]
         );
+        $this->addAudit('config_delete', $name . ' scope=' . $this->scopeLabel($serviceId));
         return true;
     }
 
     public function updateLatestHistoryNewValue(string $name, ?string $serviceId, string $currentPlainValue): void
     {
+        $serviceId = $this->scopeId($serviceId);
         $result = $this->db->query(
             "SELECT id FROM secret_history
              WHERE secret_name = ?
-               AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))
+               AND service_id = ?
              ORDER BY rotated_at DESC, id DESC
              LIMIT 1",
-            [$name, $serviceId, $serviceId]
+            [$name, $serviceId]
         );
         $row = $result->rows[0] ?? null;
         if (!$row) {
@@ -225,6 +222,7 @@ class StorageService
 
     public function addHistory(string $name, ?string $oldPlainValue, ?string $serviceId = null, string $triggerType = 'manual'): bool
     {
+        $serviceId = $this->scopeId($serviceId);
         $encryptedOldValue = $oldPlainValue !== null
             ? CryptoService::encrypt($oldPlainValue, $this->masterKey)
             : null;
@@ -233,17 +231,18 @@ class StorageService
             "INSERT INTO secret_history (secret_name, service_id, secret_value, new_secret_value, trigger_type) VALUES (?, ?, ?, NULL, ?)",
             [$name, $serviceId, $encryptedOldValue, $triggerType]
         );
+        $this->addAudit('rotation', $name . ' scope=' . $this->scopeLabel($serviceId) . ' trigger=' . $triggerType);
 
         // Enforce retention policy (keep last 3 per secret + scope)
         $this->db->exec(
             "DELETE FROM secret_history WHERE id NOT IN (
                 SELECT id FROM secret_history
                 WHERE secret_name = ?
-                  AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))
+                  AND service_id = ?
                 ORDER BY rotated_at DESC, id DESC LIMIT 3
             ) AND secret_name = ?
-              AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))",
-            [$name, $serviceId, $serviceId, $name, $serviceId, $serviceId]
+              AND service_id = ?",
+            [$name, $serviceId, $name, $serviceId]
         );
 
         return true;
@@ -251,14 +250,15 @@ class StorageService
 
     public function getLastAutoRotatedAt(string $name, ?string $serviceId): ?int
     {
+        $serviceId = $this->scopeId($serviceId);
         $result = $this->db->query(
             "SELECT rotated_at FROM secret_history
              WHERE secret_name = ?
-               AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))
+               AND service_id = ?
                AND trigger_type IN ('auto', 'sync-auto')
              ORDER BY rotated_at DESC, id DESC
              LIMIT 1",
-            [$name, $serviceId, $serviceId]
+            [$name, $serviceId]
         );
         $row = $result->rows[0] ?? null;
         if (!$row || empty($row['rotated_at'])) {
@@ -270,12 +270,13 @@ class StorageService
 
     public function getHistory(string $name, ?string $serviceId = null): array
     {
+        $serviceId = $this->scopeId($serviceId);
         $result = $this->db->query(
             "SELECT * FROM secret_history
              WHERE secret_name = ?
-               AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))
+               AND service_id = ?
              ORDER BY rotated_at DESC",
-            [$name, $serviceId, $serviceId]
+            [$name, $serviceId]
         );
 
         $history = [];
@@ -429,12 +430,12 @@ class StorageService
                    COALESCE(sm.service_name, 'Global') AS service_name,
                    (SELECT rotated_at FROM secret_history
                     WHERE secret_name = ms.secret_name
-                      AND (service_id = ms.service_id OR (service_id IS NULL AND ms.service_id IS NULL))
+                      AND service_id = ms.service_id
                     ORDER BY datetime(rotated_at) DESC, id DESC LIMIT 1) AS last_rotated,
                    (SELECT rotated_at FROM secret_history
                     WHERE secret_name = ms.secret_name
-                      AND (service_id = ms.service_id OR (service_id IS NULL AND ms.service_id IS NULL))
-                      AND trigger_type = 'auto'
+                      AND service_id = ms.service_id
+                      AND trigger_type IN ('auto', 'sync-auto')
                     ORDER BY datetime(rotated_at) DESC, id DESC LIMIT 1) AS last_auto_rotated
             FROM managed_secrets ms
             LEFT JOIN service_metadata sm ON ms.service_id = sm.service_id
@@ -445,32 +446,30 @@ class StorageService
 
     public function advanceNextRotationAt(string $name, ?string $serviceId, int $intervalDays, string $intervalUnit): void
     {
-        $divisorMap      = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
-        $intervalSeconds = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
-        if ($intervalSeconds <= 0) {
+        $nextAt = Helpers::nextRotationAt($intervalDays, $intervalUnit);
+        if ($nextAt === null) {
             return;
         }
         $this->db->exec(
             "UPDATE managed_secrets
-             SET next_rotation_at = datetime(next_rotation_at, '+' || ? || ' seconds')
+             SET next_rotation_at = ?
              WHERE secret_name = ?
-               AND (service_id = ? OR (service_id IS NULL AND ? IS NULL))",
-            [$intervalSeconds, $name, $serviceId, $serviceId]
+               AND service_id = ?",
+            [$nextAt, $name, $this->scopeId($serviceId)]
         );
     }
 
     public function advanceNextRotationAtForGroup(string $groupName, int $intervalDays, string $intervalUnit): void
     {
-        $divisorMap      = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
-        $intervalSeconds = $intervalDays * ($divisorMap[$intervalUnit] ?? 86400);
-        if ($intervalSeconds <= 0) {
+        $nextAt = Helpers::nextRotationAt($intervalDays, $intervalUnit);
+        if ($nextAt === null) {
             return;
         }
         $this->db->exec(
             "UPDATE managed_secrets
-             SET next_rotation_at = datetime(next_rotation_at, '+' || ? || ' seconds')
+             SET next_rotation_at = ?
              WHERE sync_group = ?",
-            [$intervalSeconds, $groupName]
+            [$nextAt, $groupName]
         );
     }
 
@@ -497,5 +496,45 @@ class StorageService
             "UPDATE service_metadata SET group_name = ?, updated_at = CURRENT_TIMESTAMP WHERE service_id = ?",
             [$groupName, $serviceId]
         );
+    }
+
+    public function tryAcquireRotationLock(string $owner, int $ttlSeconds = 1800): bool
+    {
+        $now = time();
+        $this->db->exec("DELETE FROM rotation_locks WHERE expires_at < ?", [$now]);
+        $this->db->exec(
+            "INSERT OR IGNORE INTO rotation_locks (id, owner, expires_at) VALUES (1, ?, ?)",
+            [$owner, $now + max(30, $ttlSeconds)]
+        );
+        $row = $this->db->query("SELECT owner FROM rotation_locks WHERE id = 1")->rows[0] ?? null;
+        return is_array($row) && (string)($row['owner'] ?? '') === $owner;
+    }
+
+    public function releaseRotationLock(string $owner): void
+    {
+        $this->db->exec("DELETE FROM rotation_locks WHERE id = 1 AND owner = ?", [$owner]);
+    }
+
+    public function addAudit(string $event, string $detail): void
+    {
+        $this->db->exec(
+            "INSERT INTO audit_events (event, detail, created_at) VALUES (?, ?, ?)",
+            [$event, $detail, time()]
+        );
+        $this->db->exec(
+            "DELETE FROM audit_events WHERE id NOT IN (
+                SELECT id FROM audit_events ORDER BY id DESC LIMIT 500
+            )"
+        );
+    }
+
+    private function scopeId(?string $serviceId): string
+    {
+        return ($serviceId === null || $serviceId === '') ? '' : $serviceId;
+    }
+
+    private function scopeLabel(string $serviceId): string
+    {
+        return $serviceId === '' ? 'global' : $serviceId;
     }
 }

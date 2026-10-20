@@ -77,6 +77,31 @@ class Helpers
         return in_array($unit, ['minute', 'hour', 'day'], true) ? (string)$unit : 'day';
     }
 
+    /**
+     * Seconds between rotations. Zero means manual-only.
+     */
+    public static function intervalSeconds(int $interval, string $unit): int
+    {
+        if ($interval <= 0) {
+            return 0;
+        }
+        $divisorMap = ['minute' => 60, 'hour' => 3600, 'day' => 86400];
+        return $interval * ($divisorMap[$unit] ?? 86400);
+    }
+
+    /**
+     * Next run is one full interval after $now. Overdue work does not catch up
+     * by repeating inside the missed windows.
+     */
+    public static function nextRotationAt(int $interval, string $unit, ?int $now = null): ?string
+    {
+        $seconds = self::intervalSeconds($interval, $unit);
+        if ($seconds <= 0) {
+            return null;
+        }
+        return gmdate('Y-m-d H:i:s', ($now ?? time()) + $seconds);
+    }
+
     public static function normalizeSyncGroup(?string $syncGroup): ?string
     {
         $syncGroup = trim((string)$syncGroup);
@@ -207,52 +232,71 @@ class Helpers
 
     public static function getClientIp(): string
     {
-        $remote = $_SERVER['REMOTE_ADDR'] ?? '';
-        $remote = is_string($remote) ? trim($remote) : '';
+        $remote = self::validIp($_SERVER['REMOTE_ADDR'] ?? '') ?? 'unknown';
+
+        // PHP-FPM is reached from local nginx. nginx overwrites X-Real-IP with
+        // the TCP peer it actually accepted, so a client-supplied header is ignored.
+        if (self::isLoopback($remote)) {
+            $observed = self::validIp($_SERVER['HTTP_X_REAL_IP'] ?? '');
+            if ($observed !== null) {
+                $remote = $observed;
+            }
+        }
 
         if (!self::isTrustedProxy($remote)) {
-            return $remote !== '' ? $remote : 'unknown';
+            return $remote;
         }
 
         $forwarded = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
-        if (is_string($forwarded) && $forwarded !== '') {
-            $parts = array_reverse(explode(',', $forwarded));
-            foreach ($parts as $part) {
-                $candidate = trim($part);
-                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
-                    return $candidate;
-                }
+        if (!is_string($forwarded) || $forwarded === '') {
+            return $remote;
+        }
+
+        $parts = array_map('trim', explode(',', $forwarded));
+        for ($i = count($parts) - 1; $i >= 0; $i--) {
+            $candidate = self::validIp($parts[$i]);
+            if ($candidate === null) {
+                continue;
+            }
+            if (!self::isTrustedProxy($candidate)) {
+                return $candidate;
             }
         }
 
-        $realIp = $_SERVER['HTTP_X_REAL_IP'] ?? '';
-        if (is_string($realIp)) {
-            $realIp = trim($realIp);
-            if (filter_var($realIp, FILTER_VALIDATE_IP)) {
-                return $realIp;
-            }
-        }
-
-        return $remote !== '' ? $remote : 'unknown';
+        return $remote;
     }
 
     public static function isTrustedProxy(string $ip): bool
     {
-        if ($ip === '' || $ip === '127.0.0.1' || $ip === '::1') {
-            return true;
-        }
-        $trusted = trim((string)(getenv('TRUSTED_PROXY_IPS') ?: ''));
-        if ($trusted !== '') {
-            foreach (explode(',', $trusted) as $candidate) {
-                if (trim($candidate) === $ip) {
-                    return true;
-                }
-            }
+        if ($ip === '' || self::validIp($ip) === null) {
             return false;
         }
-        // No explicit whitelist: trust only private/reserved-range addresses
-        // (RFC-1918, loopback, link-local, etc.) — i.e. return true when the
-        // IP is NOT a routable public address.
-        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+        $trusted = trim((string)(getenv('TRUSTED_PROXY_IPS') ?: ''));
+        if ($trusted === '') {
+            return false;
+        }
+        foreach (explode(',', $trusted) as $candidate) {
+            if (trim($candidate) === $ip) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function isLoopback(string $ip): bool
+    {
+        return $ip === '127.0.0.1' || $ip === '::1';
+    }
+
+    private static function validIp(mixed $value): ?string
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+        $value = trim($value);
+        if ($value === '' || filter_var($value, FILTER_VALIDATE_IP) === false) {
+            return null;
+        }
+        return $value;
     }
 }

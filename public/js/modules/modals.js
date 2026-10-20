@@ -131,6 +131,7 @@ export function initModalHandlers() {
             closeConfigModal();
             closeHistoryModal();
             closeGroupModal();
+            document.querySelector('#stepUpModal.open .js-close-step-up')?.dispatchEvent(new Event('click'));
         }
     });
 
@@ -153,5 +154,66 @@ export function initModalHandlers() {
 
         okBtn.addEventListener('click', handler);
         modal.classList.add('open');
+    };
+
+    window.promptStepUp = function () {
+        if (window.promptStepUp._pending) {
+            return window.promptStepUp._pending;
+        }
+        const pending = new Promise((resolve, reject) => {
+            const stepModal = document.getElementById('stepUpModal');
+            const form = document.getElementById('stepUpForm');
+            const input = document.getElementById('stepUpKey');
+            const errorEl = document.getElementById('stepUpError');
+            if (!stepModal || !form || !input || !errorEl) {
+                reject(new Error('Admin key confirmation is unavailable'));
+                return;
+            }
+
+            errorEl.textContent = '';
+            input.value = '';
+            stepModal.classList.add('open');
+            window.setTimeout(() => input.focus(), 20);
+
+            const finish = (err) => {
+                stepModal.classList.remove('open');
+                form.removeEventListener('submit', onSubmit);
+                stepModal.querySelectorAll('.js-close-step-up').forEach((btn) => {
+                    btn.removeEventListener('click', onCancel);
+                });
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            };
+            const onCancel = () => finish(new Error('cancelled'));
+            const onSubmit = async (event) => {
+                event.preventDefault();
+                const body = new FormData();
+                body.append('key', input.value);
+                body.append('csrf_token', document.body?.dataset.csrfToken || '');
+                try {
+                    const res = await fetch('/api/step-up', { method: 'POST', body });
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok || !payload.success) {
+                        errorEl.textContent = payload.error || 'Invalid admin key';
+                        return;
+                    }
+                    finish(null);
+                } catch {
+                    errorEl.textContent = 'Unable to confirm admin key';
+                }
+            };
+
+            form.addEventListener('submit', onSubmit);
+            stepModal.querySelectorAll('.js-close-step-up').forEach((btn) => {
+                btn.addEventListener('click', onCancel);
+            });
+        }).finally(() => {
+            window.promptStepUp._pending = null;
+        });
+        window.promptStepUp._pending = pending;
+        return pending;
     };
 }

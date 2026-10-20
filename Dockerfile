@@ -1,12 +1,13 @@
 # ── Stage: build-core ────────────────────────────────────────────────────────
 # Builds the mesahub-server Go binary for embedded mode.
-# Override MESAHUB_CORE_VERSION to pin a specific commit/tag:
-#   docker build --build-arg MESAHUB_CORE_VERSION=v1.0.0 .
+# Override MESAHUB_CORE_VERSION to pin a specific commit:
+#   docker build --build-arg MESAHUB_CORE_VERSION=<git-sha> .
 FROM golang:1.24-alpine AS build-core
 RUN apk add --no-cache gcc musl-dev sqlite-dev git
-ARG MESAHUB_CORE_VERSION=trunk
-RUN git clone --depth 1 --branch ${MESAHUB_CORE_VERSION} \
-    https://github.com/0xdps/mesahub-core.git /mesahub-core
+ARG MESAHUB_CORE_VERSION=faef918de9c4c8eb0d3098adbc219379fa6830a5
+RUN git clone --filter=blob:none --no-checkout https://github.com/0xdps/mesahub-core.git /mesahub-core \
+ && git -C /mesahub-core fetch --depth 1 origin ${MESAHUB_CORE_VERSION} \
+ && git -C /mesahub-core checkout --detach FETCH_HEAD
 WORKDIR /mesahub-core/server
 RUN CGO_ENABLED=1 GOOS=linux go build -o /go/bin/mesahub-server ./cmd/server
 

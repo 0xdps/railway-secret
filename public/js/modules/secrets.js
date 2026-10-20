@@ -1,6 +1,6 @@
 // Secret reveal, copy, and auto-hide
 
-import { showToast, refreshIcons } from './utils.js';
+import { showToast, refreshIcons, ensureStepUp } from './utils.js';
 
 const autoHideTimers = new WeakMap();
 const AUTO_HIDE_MS   = 30_000;
@@ -22,6 +22,7 @@ function scheduleAutoHide(span, toggleBtn) {
 }
 
 export async function fetchSecretValue(secretName, serviceId) {
+    await ensureStepUp();
     const params   = new URLSearchParams({ name: secretName, serviceId: serviceId || '' });
     const response = await fetch(`/api/secret-value?${params}`);
     const payload  = await response.json();
@@ -55,8 +56,8 @@ export function initSecretHandlers() {
             span.classList.add('revealed');
             if (icon) { icon.setAttribute('data-lucide', 'eye-off'); refreshIcons(); }
             scheduleAutoHide(span, toggleBtn);
-        } catch {
-            showToast('Could not fetch value', 'error');
+        } catch (err) {
+            showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Could not fetch value', 'error');
             if (icon) { icon.setAttribute('data-lucide', 'eye'); refreshIcons(); }
         } finally {
             toggleBtn.disabled = false;
@@ -99,8 +100,8 @@ export function initSecretHandlers() {
                 const resetIcon = copyBtn.querySelector('[data-lucide]');
                 if (resetIcon) { resetIcon.setAttribute('data-lucide', 'copy'); refreshIcons(); }
             }, 2000);
-        } catch {
-            showToast('Unable to copy value', 'error');
+        } catch (err) {
+            showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Unable to copy value', 'error');
         }
     });
 }

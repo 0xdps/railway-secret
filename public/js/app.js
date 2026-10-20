@@ -1,6 +1,6 @@
 // Main entry point – loaded as type="module" (deferred, strict mode)
 
-import { refreshIcons, getCsrfToken, showToast, applyRelativeTimes } from './modules/utils.js';
+import { refreshIcons, getCsrfToken, showToast, applyRelativeTimes, ensureStepUp } from './modules/utils.js';
 import { initCustomSelects, closeAllCustomSelects }                   from './modules/custom-select.js';
 import { openConfigModal, closeConfigModal, initModalHandlers }       from './modules/modals.js';
 import {
@@ -27,6 +27,29 @@ function updateDocumentTitle() {
 
 // ── Initialise all modules ─────────────────────────────────────────────────────
 initModalHandlers();   // sets window.confirmDialog, wires backdrops + escape key
+document.addEventListener('submit', async (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const manual = form.querySelector('input[name="manual_value"]');
+    if (!manual || manual.value.trim() === '') return;
+    if (form.dataset.stepUpGranted === '1') {
+        form.dataset.stepUpGranted = '';
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+        await ensureStepUp();
+        form.dataset.stepUpGranted = '1';
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    } catch {
+        showToast('Admin key confirmation cancelled', 'error');
+    }
+}, true);
 initFilterHandlers();
 initSidebarHandlers();
 initSecretHandlers();
@@ -110,7 +133,7 @@ document.body.addEventListener('click', async (event) => {
         if (!groupName) { showToast('Missing sync group', 'error'); return; }
         window.confirmDialog(
             'Rotate sync group',
-            `Rotate every secret linked to <strong>${groupName}</strong> to one shared value? This triggers redeploys for affected services.`,
+            `Rotate every secret linked to ${groupName} to one shared value? This triggers redeploys for affected services.`,
             async () => {
                 rotateSyncGroupBtn.disabled = true;
                 try {
@@ -155,10 +178,11 @@ document.body.addEventListener('click', async (event) => {
 
     window.confirmDialog(
         'Rollback last rotation',
-        `Restore <strong>${secretName}</strong> to the value it held before its last rotation? This will trigger a Railway redeploy.`,
+        `Restore ${secretName} to the value it held before its last rotation? This will trigger a Railway redeploy.`,
         async () => {
             rollbackRowBtn.disabled = true;
             try {
+                await ensureStepUp();
                 const fd = new FormData();
                 fd.append('key', secretName);
                 fd.append('serviceId', serviceId);
@@ -170,8 +194,8 @@ document.body.addEventListener('click', async (event) => {
                 } else {
                     showToast(`${secretName} rolled back`, 'success');
                 }
-            } catch {
-                showToast('Rollback failed', 'error');
+            } catch (err) {
+                showToast(err && err.message === 'cancelled' ? 'Admin key confirmation cancelled' : 'Rollback failed', 'error');
             } finally {
                 rollbackRowBtn.disabled = false;
             }

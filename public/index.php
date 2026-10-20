@@ -33,6 +33,7 @@ use App\Middleware\AuthMiddleware;
 use App\Middleware\SecurityHeadersMiddleware;
 use DI\Bridge\Slim\Bridge;
 use DI\ContainerBuilder;
+use Mesahub\DatabaseHandle;
 use Slim\Routing\RouteCollectorProxy;
 
 // -- DI Container -------------------------------------------------------------
@@ -59,6 +60,28 @@ $app->get('/login',  [AuthController::class, 'showLogin']);
 $app->post('/login', [AuthController::class, 'login']);
 $app->post('/logout', [AuthController::class, 'logout']);
 
+$app->get('/ready', function ($request, $response) use ($container) {
+    try {
+        foreach (['RAILWAY_TOKEN', 'ADMIN_KEY', 'SESSION_SECRET', 'MASTER_KEY', 'MESAHUB_URL'] as $name) {
+            $value = getenv($name);
+            if ($value === false || trim((string)$value) === '') {
+                throw new RuntimeException('Missing ' . $name);
+            }
+        }
+        $container->get(DatabaseHandle::class)->query('SELECT 1 AS ok');
+        $response->getBody()->write((string)json_encode(['ok' => true, 'status' => 'ready', 'timestamp' => gmdate('c')]));
+        return $response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'application/json; charset=utf-8');
+    } catch (Throwable $e) {
+        error_log('Readiness check failed: ' . $e->getMessage());
+        $response->getBody()->write((string)json_encode(['ok' => false, 'status' => 'not_ready']));
+        return $response
+            ->withStatus(503)
+            ->withHeader('Content-Type', 'application/json; charset=utf-8');
+    }
+});
+
 // -- Protected routes (AuthMiddleware applied to the whole group) --------------
 $app->group('', function (RouteCollectorProxy $group) {
     // Pages
@@ -73,6 +96,8 @@ $app->group('', function (RouteCollectorProxy $group) {
     $group->post(  '/api/rotate',                  [ApiController::class, 'rotate']);
     $group->post(  '/api/rotate-sync-group',       [ApiController::class, 'rotateSyncGroup']);
     $group->post(  '/api/rotate-all-due',          [ApiController::class, 'rotateAllDue']);
+    $group->get(   '/api/step-up',                 [ApiController::class, 'stepUpStatus']);
+    $group->post(  '/api/step-up',                 [ApiController::class, 'stepUp']);
     $group->get(   '/api/secret-value',            [ApiController::class, 'secretValue']);
     $group->post(  '/api/sync-group-config',       [ApiController::class, 'syncGroupConfigSave']);
     $group->delete('/api/sync-group-config',       [ApiController::class, 'syncGroupConfigDelete']);

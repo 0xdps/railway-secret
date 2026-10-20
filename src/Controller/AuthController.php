@@ -10,6 +10,7 @@ use App\Service\LoginRateLimiter;
 use App\Service\RailwayCacheService;
 use App\Service\RailwayClient;
 use App\Service\SessionManager;
+use App\Service\StorageService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Log\LoggerInterface;
@@ -21,6 +22,7 @@ class AuthController
         private readonly LoginRateLimiter    $rateLimiter,
         private readonly RailwayClient       $railway,
         private readonly RailwayCacheService $cache,
+        private readonly StorageService      $storage,
         private readonly ProjectConfig       $projectConfig,
         private readonly LoggerInterface     $logger,
     ) {}
@@ -47,6 +49,7 @@ class AuthController
 
         if ($this->session->login($key)) {
             $this->rateLimiter->clearFailure($ip);
+            $this->storage->addAudit('login_success', $ip);
             // Warm cache so the dashboard loads instantly.
             try {
                 Helpers::getServicesCached($this->railway, $this->cache, $this->projectConfig->projectId, $this->projectConfig->environmentId, true);
@@ -58,6 +61,7 @@ class AuthController
         }
 
         $this->rateLimiter->recordFailure($ip, time());
+        $this->storage->addAudit('login_failure', $ip);
         $error = 'Invalid Admin Key';
         return $this->loginPage($response, $error);
     }

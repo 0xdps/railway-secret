@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 use App\Config\ProjectConfig;
 use App\Helpers;
+use App\Service\AuthSessionStore;
 use App\Service\LoginRateLimiter;
 use App\Service\RailwayCacheService;
 use App\Service\RailwayClient;
 use App\Service\RotatorService;
 use App\Service\SessionManager;
 use App\Service\StorageService;
+use App\Service\WebhookNotifier;
 use GuzzleHttp\Client as GuzzleClient;
 use Mesahub\DatabaseHandle;
 use Mesahub\MesahubClient;
@@ -52,11 +54,16 @@ return [
     },
 
     // ── Services ─────────────────────────────────────────────────────────────
-    SessionManager::class => static function (): SessionManager {
-        $sessionSecret    = Helpers::requireEnv('SESSION_SECRET');
-        $adminKey         = Helpers::requireEnv('ADMIN_KEY');
-        $strictCookieMode = trim((string)(getenv('RAILWAY_ENVIRONMENT_NAME') ?: '')) !== '';
-        return new SessionManager($sessionSecret, $adminKey, $strictCookieMode);
+    SessionManager::class => static function (AuthSessionStore $sessions): SessionManager {
+        $sessionSecret = Helpers::requireEnv('SESSION_SECRET');
+        $adminKey      = Helpers::requireEnv('ADMIN_KEY');
+        $explicit      = getenv('SESSION_COOKIE_SECURE');
+        if ($explicit !== false && trim((string)$explicit) !== '') {
+            $secureCookie = filter_var($explicit, FILTER_VALIDATE_BOOLEAN);
+        } else {
+            $secureCookie = trim((string)(getenv('RAILWAY_ENVIRONMENT_NAME') ?: '')) !== '';
+        }
+        return new SessionManager($sessionSecret, $adminKey, $sessions, $secureCookie);
     },
 
     RailwayClient::class => static function (LoggerInterface $logger): RailwayClient {
@@ -77,8 +84,14 @@ return [
         return new StorageService($db, $masterKey);
     },
 
-    RotatorService::class => static function (RailwayClient $railway, StorageService $storage): RotatorService {
-        return new RotatorService($railway, $storage);
+    RotatorService::class => static function (RailwayClient $railway, StorageService $storage, WebhookNotifier $notifier): RotatorService {
+        return new RotatorService($railway, $storage, $notifier);
+    },
+
+    WebhookNotifier::class => static function (): WebhookNotifier {
+        $url = getenv('ROTATION_WEBHOOK_URL');
+        $url = ($url === false || trim((string)$url) === '') ? null : trim((string)$url);
+        return new WebhookNotifier($url);
     },
 
     LoginRateLimiter::class => static function (DatabaseHandle $db): LoginRateLimiter {

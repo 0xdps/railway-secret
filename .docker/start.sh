@@ -24,15 +24,45 @@ fi
 if [ "$_HOST" = "local" ]; then
   # ── Embedded mode ───────────────────────────────────────────────────────────
   export MESAHUB_CORE_PORT="${MESAHUB_CORE_PORT:-3001}"
-  _ADMIN_TOKEN="${MESAHUB_ADMIN_TOKEN:-$(openssl rand -hex 32)}"
+  DATA_PATH="${DATA_PATH:-/data}"
+  mkdir -p "$DATA_PATH"
+  TOKEN_FILE="${DATA_PATH}/mesahub-admin.token"
+
+  if [ -n "${MESAHUB_ADMIN_TOKEN:-}" ]; then
+    _ADMIN_TOKEN="$MESAHUB_ADMIN_TOKEN"
+  elif [ -f "$TOKEN_FILE" ]; then
+    _ADMIN_TOKEN=$(cat "$TOKEN_FILE")
+  else
+    _ADMIN_TOKEN=$(openssl rand -hex 32)
+    umask 077
+    printf '%s' "$_ADMIN_TOKEN" > "$TOKEN_FILE"
+  fi
+  chmod 600 "$TOKEN_FILE" 2>/dev/null || true
+
+  if id www-data >/dev/null 2>&1; then
+    chown www-data:www-data "$DATA_PATH" "$TOKEN_FILE" 2>/dev/null || true
+    chmod 700 "$DATA_PATH" 2>/dev/null || true
+  fi
 
   echo "[0] Starting bundled mesahub-server on :$MESAHUB_CORE_PORT (db: $_DBNAME)..."
-  DATA_PATH="${DATA_PATH:-/data}" \
-  ADMIN_TOKEN="$_ADMIN_TOKEN" \
-  SESSION_SECRET="$(openssl rand -hex 32)" \
-  FILE_TOKEN_SIGNING_SECRET="$(openssl rand -hex 32)" \
-  PORT="$MESAHUB_CORE_PORT" \
-    mesahub-server &
+  _MESAHUB_SESSION="$(openssl rand -hex 32)"
+  _MESAHUB_FILE_SECRET="$(openssl rand -hex 32)"
+  if id www-data >/dev/null 2>&1; then
+    su -s /bin/sh -c "exec env \
+      DATA_PATH='${DATA_PATH}' \
+      ADMIN_TOKEN='${_ADMIN_TOKEN}' \
+      SESSION_SECRET='${_MESAHUB_SESSION}' \
+      FILE_TOKEN_SIGNING_SECRET='${_MESAHUB_FILE_SECRET}' \
+      PORT='${MESAHUB_CORE_PORT}' \
+      /usr/local/bin/mesahub-server" www-data &
+  else
+    DATA_PATH="$DATA_PATH" \
+    ADMIN_TOKEN="$_ADMIN_TOKEN" \
+    SESSION_SECRET="$_MESAHUB_SESSION" \
+    FILE_TOKEN_SIGNING_SECRET="$_MESAHUB_FILE_SECRET" \
+    PORT="$MESAHUB_CORE_PORT" \
+      mesahub-server &
+  fi
   MESAHUB_PID=$!
 
   max_attempts=30
