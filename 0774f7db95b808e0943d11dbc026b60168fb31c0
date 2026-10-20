@@ -1,0 +1,40 @@
+.docker/nginx.conf
+  ebe1edb175c63ac5 32-36
+railway.toml
+  ebe1edb175c63ac5 8-10
+.dockerignore
+  efd19c13f280c02a 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.12",
+  "base_commit_sha": "0774f7db95b808e0943d11dbc026b60168fb31c0",
+  "prompts": {
+    "ebe1edb175c63ac5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "caf0832f-41f8-4e67-a859-71d0429dc8a8",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 0,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    },
+    "efd19c13f280c02a": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "6bc9e59d-fe0a-44f7-b8e3-2cc69c21ffa9",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 0,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}

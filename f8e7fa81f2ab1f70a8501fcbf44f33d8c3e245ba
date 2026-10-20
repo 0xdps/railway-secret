@@ -1,0 +1,24 @@
+.docker/start.sh
+  s_c0a52b786706da::t_2a461904bf90c1 6-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "f8e7fa81f2ab1f70a8501fcbf44f33d8c3e245ba",
+  "prompts": {},
+  "humans": {
+    "h_d60f3499e5a1c3": {
+      "author": "Devendra Pratap Singh"
+    }
+  },
+  "sessions": {
+    "s_c0a52b786706da": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "7c0d468b-f108-4a79-ad29-01f08725b458",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>"
+    }
+  }
+}

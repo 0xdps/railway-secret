@@ -1,0 +1,23 @@
+src/Database/MigrationRunner.php
+  ebe1edb175c63ac5 74-77,201-206,210,229,251-253,259-267,288,291-292,295-298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "bc8be87ed73995104fb9a8e3a8f5bfbf227c0e8d",
+  "prompts": {
+    "ebe1edb175c63ac5": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "caf0832f-41f8-4e67-a859-71d0429dc8a8",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 10,
+      "accepted_lines": 31,
+      "overriden_lines": 0
+    }
+  }
+}

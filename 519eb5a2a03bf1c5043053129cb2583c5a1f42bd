@@ -1,0 +1,27 @@
+public/index.php
+  1a4a271500156eee 425
+public/robots.txt
+  1a4a271500156eee 1-2
+src/Views/layout.php
+  1a4a271500156eee 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "519eb5a2a03bf1c5043053129cb2583c5a1f42bd",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/auto"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    }
+  }
+}

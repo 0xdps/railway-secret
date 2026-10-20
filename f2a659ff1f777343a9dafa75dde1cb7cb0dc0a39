@@ -1,0 +1,62 @@
+src/Views/components/dashboard-main.php
+  c0a52b786706da72 1,14,45,72
+src/Views/components/managed-main.php
+  c0a52b786706da72 34,40,50,104,108,111,115,121,135-136,163
+src/Controller/ApiController.php
+  c0a52b786706da72 553-554
+src/Views/components/sidebar.php
+  c0a52b786706da72 51,53,98,107,113-114,124,131-133,135,162
+src/Helpers.php
+  c0a52b786706da72 253-255
+src/Views/login.php
+  c0a52b786706da72 25
+bootstrap.php
+  c0a52b786706da72 11-18
+src/Views/layout.php
+  c0a52b786706da72 23,28,30,54,63-65,160
+src/Views/components/about-content.php
+  c0a52b786706da72 137-138,145-147,149,156,163,186,200,232
+src/Views/components/secret-row.php
+  c0a52b786706da72 18,21,29,33-34,37-38,42-43,57,94-95
+src/Middleware/SecurityHeadersMiddleware.php
+  c0a52b786706da72 39-40
+src/Service/RailwayCacheService.php
+  c0a52b786706da72 49
+public/js/modules/modals.js
+  c0a52b786706da72 60-63,145-146
+src/Service/CryptoService.php
+  c0a52b786706da72 3-4
+src/Service/SessionManager.php
+  c0a52b786706da72 102-103,105-107
+src/Views/components/rotation-history-body.php
+  c0a52b786706da72 39-40,55
+src/Views/components/rotate-modal-form.php
+  c0a52b786706da72 20,32-34,46,50
+src/Views/components/config-modal-form.php
+  c0a52b786706da72 22,27,39-41,53-54,64,67,100-101,141-142,227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "f2a659ff1f777343a9dafa75dde1cb7cb0dc0a39",
+  "prompts": {
+    "c0a52b786706da72": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "7c0d468b-f108-4a79-ad29-01f08725b458",
+        "model": "unknown"
+      },
+      "human_author": "Devendra Pratap Singh",
+      "messages": [],
+      "total_additions": 112,
+      "total_deletions": 91,
+      "accepted_lines": 112,
+      "overriden_lines": 0
+    }
+  },
+  "humans": {
+    "h_d60f3499e5a1c3": {
+      "author": "Devendra Pratap Singh"
+    }
+  }
+}

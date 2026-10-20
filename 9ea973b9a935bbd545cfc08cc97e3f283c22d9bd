@@ -1,0 +1,49 @@
+src/Controller/ApiController.php
+  1a4a271500156eee 1-15,17-26,28-117,119-154,156-193,195-267,269-279,281-298,300-322,324-358,360-384,386-415,417-461,463-537,539-577,579-601,603-625,627-686,688-722,724-747,749-778,780-783
+src/Helpers.php
+  1a4a271500156eee 1-254
+Dockerfile
+  1a4a271500156eee 3-5,26-28
+composer.json
+  1a4a271500156eee 1-6,10,13-23
+src/Service/LoginRateLimiter.php
+  1a4a271500156eee 1-141
+src/Middleware/AuthMiddleware.php
+  1a4a271500156eee 1-51
+src/Middleware/SecurityHeadersMiddleware.php
+  1a4a271500156eee 1-42
+src/Controller/PageController.php
+  1a4a271500156eee 1-14,16-24,26-198
+src/Config/ProjectConfig.php
+  1a4a271500156eee 1-17
+src/Controller/AuthController.php
+  1a4a271500156eee 1-14,16-24,26-89
+config/container.php
+  1a4a271500156eee 1-12,17-74
+bootstrap.php
+  1a4a271500156eee 3-7
+src/Service/RailwayClient.php
+  1a4a271500156eee 7-10,16-19,26-28,30,33-40,43,45-46
+cron.php
+  1a4a271500156eee 3,9-11,44-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "9ea973b9a935bbd545cfc08cc97e3f283c22d9bd",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 1892,
+      "total_deletions": 85,
+      "accepted_lines": 1852,
+      "overriden_lines": 22
+    }
+  }
+}

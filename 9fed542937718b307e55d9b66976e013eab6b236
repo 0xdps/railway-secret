@@ -1,0 +1,49 @@
+src/Views/components/secrets-table-body.php
+  1a4a271500156eee 17
+src/Service/CryptoService.php
+  1a4a271500156eee 10-19,29,34,38,64,66
+src/Views/components/docs-content.php
+  1a4a271500156eee 15
+src/Views/components/rotation-history-body.php
+  1a4a271500156eee 32-34
+public/js/dashboard.js
+  1a4a271500156eee 380-388,716-759
+cron.php
+  1a4a271500156eee 60-61,69,97-100,107,115,121,134-136,139-142,157-170
+src/Views/components/managed-main.php
+  1a4a271500156eee 90-92,94-99,116,118,126-131,201
+src/Views/components/dashboard-main.php
+  1a4a271500156eee 51-55,165
+public/style.css
+  1a4a271500156eee 825-830
+src/Views/components/config-modal-form.php
+  1a4a271500156eee 18,47,49,62-63,68,157,166,180,192-193
+src/Service/StorageService.php
+  1a4a271500156eee 55,66-69,78-88,135-159,177-195,198-199,202,205,208,212-272,294-310,315-316,319,324-343,620
+public/index.php
+  1a4a271500156eee 98-111,695,699-711,727-733,737-742,745,753-755,764,766-770,772-790,793-795,838-873,1000,1012
+src/Service/RotatorService.php
+  1a4a271500156eee 22-26,57-74,79,81-109,111-114
+src/Views/components/rotate-modal-form.php
+  1a4a271500156eee 14-15,42-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.10",
+  "base_commit_sha": "9fed542937718b307e55d9b66976e013eab6b236",
+  "prompts": {
+    "1a4a271500156eee": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "82591c1e-c229-4d87-be98-eabbcdced813",
+        "model": "copilot/claude-sonnet-4.6"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manit@gmail.com>",
+      "messages": [],
+      "total_additions": 583,
+      "total_deletions": 113,
+      "accepted_lines": 514,
+      "overriden_lines": 12
+    }
+  }
+}

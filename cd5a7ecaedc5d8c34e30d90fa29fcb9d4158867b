@@ -1,0 +1,25 @@
+public/index.php
+  27f44e93cd5fd922 274-275,277,280
+cron.php
+  27f44e93cd5fd922 29-30,32,35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.8",
+  "base_commit_sha": "cd5a7ecaedc5d8c34e30d90fa29fcb9d4158867b",
+  "prompts": {
+    "27f44e93cd5fd922": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "4e36263a-f20f-437b-b6a2-2c167e89add9",
+        "model": "copilot/auto"
+      },
+      "human_author": "Devendra Pratap Singh <dps.manir@gmail.com>",
+      "messages": [],
+      "total_additions": 8,
+      "total_deletions": 8,
+      "accepted_lines": 44,
+      "overriden_lines": 0
+    }
+  }
+}
